@@ -20,7 +20,7 @@ st.markdown("<br><br><br><hr style='border:1px solid #1E88E5;'>", unsafe_allow_h
 # 2. ПАНЕЛЬ НАСТРОЕК И ПРЕСЕТОВ (НИЗ СТРАНИЦЫ)
 # ==========================================
 st.header("⚙️ Панель настроек и пресетов ТС")
-st.caption("Выберите готовый шаблон под ваш тип транспорта (параметры подставятся автоматически) или скорректируйте любые цифры вручную.")
+st.caption("Выберите шаблон под ваш тип транспорта или скорректируйте любые цифры. Справа от полей ввода сразу отображается сумма на весь автопарк.")
 
 # База данных пресетов (средние рыночные показатели)
 presets = {
@@ -28,8 +28,8 @@ presets = {
         "fleet_size": 50,
         "mileage": 120000,
         "consumption": 32.0,
-        "accident_rate": 15.0,  # 15% парка в год имеют ДТП
-        "accident_cost": 800000, # Тяжелые последствия на трассе
+        "accident_rate": 15.0,
+        "accident_cost": 800000,
         "hardware_cost": 160000,
         "monthly_sub": 2000,
         "accident_reduction": 55,
@@ -38,25 +38,25 @@ presets = {
     },
     "🏗️ Самосвал / Тяжелая спецтехника": {
         "fleet_size": 30,
-        "mileage": 45000,       # Пробег меньше, но моточасы и износ выше
+        "mileage": 45000,
         "consumption": 45.0,
-        "accident_rate": 25.0,  # Выше риски на объектах/карьерах
+        "accident_rate": 25.0,
         "accident_cost": 600000,
-        "hardware_cost": 170000, # Требуются антивандальные / защищенные камеры
+        "hardware_cost": 170000,
         "monthly_sub": 2000,
         "accident_reduction": 50,
-        "fuel_economy": 5.0,     # Высокий потенциал экономии на холостом ходу
+        "fuel_economy": 5.0,
         "other_savings": 1500
     },
-    "📦 Легкий коммерческий транспорт (LCV / Газель / Доставка)": {
+    "📦 Легкий коммерческий транспорт (LCV / Газель)": {
         "fleet_size": 40,
-        "mileage": 60000,       # Активная городская езда
+        "mileage": 60000,
         "consumption": 13.0,
-        "accident_rate": 20.0,  # Частые мелкие ДТП в городе
+        "accident_rate": 20.0,
         "accident_cost": 300000,
-        "hardware_cost": 130000, # Меньше камер / проще монтаж
+        "hardware_cost": 130000,
         "monthly_sub": 1800,
-        "accident_reduction": 60, # Городские засыпания и телефоны отлично ловятся DSM
+        "accident_reduction": 60,
         "fuel_economy": 3.0,
         "other_savings": 1200
     }
@@ -66,50 +66,102 @@ presets = {
 selected_preset = st.selectbox("Шаблон под тип транспортного средства:", list(presets.keys()))
 p = presets[selected_preset]
 
-# Вывод полей для ручной корректировки
-col_tech, col_costs = st.columns(2)
+# ------------------------------------------
+# ГЛАВНЫЙ МНОЖИТЕЛЬ: РАЗМЕР АВТОПАРКА
+# ------------------------------------------
+fleet_size = st.number_input("Размер автопарка (шт.) — базовый множитель для расчета итогов", min_value=1, value=p["fleet_size"], step=5)
 
-with col_tech:
-    st.subheader("Характеристики автопарка")
-    fleet_size = st.number_input("Размер автопарка (шт.)", min_value=1, value=p["fleet_size"], step=5)
-    annual_mileage = st.number_input("Средний пробег 1 авто в год (км)", min_value=1000, value=p["mileage"], step=5000)
-    fuel_consumption = st.number_input("Средний расход топлива (л/100 км)", min_value=1.0, value=p["consumption"], step=0.5)
-    fuel_price = st.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
-    
-    st.subheader("Статистика рисков и ДТП")
-    accident_rate = st.slider("Доля машин, попадающих в ДТП за год (%)", min_value=0.0, max_value=100.0, value=p["accident_rate"], step=1.0) / 100
-    accident_cost = st.number_input("Средний ущерб от одного ДТП (руб.)", min_value=1000, value=p["accident_cost"], step=50000)
+st.markdown("---")
 
-with col_costs:
-    st.subheader("Стоимость решения SKAI")
+# ПОДРАЗДЕЛ: СТОИМОСТЬ СИСТЕМЫ
+st.subheader("💰 Стоимость решения SKAI и прямые расходы")
+
+col_hw1, col_hw2 = st.columns([2, 1])
+with col_hw1:
     hardware_cost = st.number_input("Стоимость комплекта + монтаж на 1 авто (руб.)", min_value=0, value=p["hardware_cost"], step=5000)
+with col_hw2:
+    st.metric("Итого стартовые вложения (Capex)", f"{hardware_cost * fleet_size:,.0f} ₽".replace(",", " "))
+
+col_sub1, col_sub2 = st.columns([2, 1])
+with col_sub1:
     monthly_sub = st.number_input("Абонентская плата за 1 авто в месяц (руб.)", min_value=0, value=p["monthly_sub"], step=100)
-    
-    st.subheader("Целевые эффекты видеоаналитики SKAI")
-    accident_reduction = st.slider("Снижение аварийности (DSM/ADAS эффекты, %)", min_value=0, max_value=100, value=p["accident_reduction"], step=5) / 100
-    fuel_economy = st.slider("Экономия топлива за счет плавного вождения (%)", min_value=0.0, max_value=20.0, value=p["fuel_economy"], step=0.5) / 100
-    other_savings = st.number_input("Экономия на штрафах и скрытых издержках на 1 авто в месяц (руб.)", min_value=0, value=p["other_savings"], step=100)
+with col_sub2:
+    st.metric("Итого абон. плата парка / мес (Opex)", f"{monthly_sub * fleet_size:,.0f} ₽".replace(",", " "))
+
+st.markdown("---")
+
+# ПОДРАЗДЕЛ: ТОПЛИВО
+st.subheader("⛽ Топливо и пробег")
+
+col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 3])
+with col_f1:
+    annual_mileage = st.number_input("Пробег 1 авто в год (км)", min_value=1000, value=p["mileage"], step=5000)
+with col_f2:
+    fuel_consumption = st.number_input("Расход (л/100 km)", min_value=1.0, value=p["consumption"], step=0.5)
+with col_f3:
+    fuel_price = st.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
+with col_f4:
+    # Базовые затраты парка на топливо в месяц ДО внедрения
+    monthly_fuel_cost_per_car = (annual_mileage / 100 * fuel_consumption * fuel_price) / 12
+    fleet_monthly_fuel_before = monthly_fuel_cost_per_car * fleet_size
+    st.metric("Текущие траты парка на топливо / мес", f"{fleet_monthly_fuel_before:,.0f} ₽".replace(",", " "))
+
+col_fe1, col_fe2 = st.columns([2, 1])
+with col_fe1:
+    fuel_economy = st.slider("Экономия топлива за счет контроля вождения (%)", min_value=0.0, max_value=20.0, value=p["fuel_economy"], step=0.5) / 100
+with col_fe2:
+    monthly_fuel_saving_total = fleet_monthly_fuel_before * fuel_economy
+    st.metric("Итого экономия на топливе / мес", f"{monthly_fuel_saving_total:,.0f} ₽".replace(",", " "))
+
+st.markdown("---")
+
+# ПОДРАЗДЕЛ: БЕЗОПАСНОСТЬ И ДТП
+st.subheader("🛡️ Безопасность и предотвращение ДТП")
+
+col_acc1, col_acc2, col_acc3 = st.columns([3, 3, 3])
+with col_acc1:
+    accident_rate = st.slider("Доля машин, попадающих в ДТП за год (%)", min_value=0.0, max_value=100.0, value=p["accident_rate"], step=1.0) / 100
+with col_acc2:
+    accident_cost = st.number_input("Средний ущерб от одного ДТП (руб.)", min_value=1000, value=p["accident_cost"], step=50000)
+with col_acc3:
+    # Текущие средние убытки парка от ДТП в месяц
+    fleet_monthly_accident_before = (fleet_size * accident_rate * accident_cost) / 12
+    st.metric("Текущие убытки парка от ДТП / мес", f"{fleet_monthly_accident_before:,.0f} ₽".replace(",", " "))
+
+col_acr1, col_acr2 = st.columns([2, 1])
+with col_acr1:
+    accident_reduction = st.slider("Снижение аварийности благодаря SKAI ADAS/DSM (%)", min_value=0, max_value=100, value=p["accident_reduction"], step=5) / 100
+with col_acr2:
+    monthly_accident_saving_total = fleet_monthly_accident_before * accident_reduction
+    st.metric("Итого сберегаем на ДТП / мес", f"{monthly_accident_saving_total:,.0f} ₽".replace(",", " "))
+
+st.markdown("---")
+
+# ПОДРАЗДЕЛ: СКРЫТЫЕ ИЗДЕРЖКИ
+st.subheader("🧾 Дополнительные скрытые издержки")
+
+col_oth1, col_oth2 = st.columns([2, 1])
+with col_oth1:
+    other_savings = st.number_input("Экономия на штрафах и прочих рисках на 1 авто в месяц (руб.)", min_value=0, value=p["other_savings"], step=100)
+with col_oth2:
+    st.metric("Итого экономия на штрафах / мес", f"{other_savings * fleet_size:,.0f} ₽".replace(",", " "))
 
 
 # ==========================================
-# 3. ЛОГИКА МАТЕМАТИЧЕСКОГО РАСЧЕТА
+# 3. МАТЕМАТИЧЕСКИЙ ПЕРЕСЧЕТ ДЛЯ ФИНАЛЬНЫХ СУММ
 # ==========================================
 total_capex = fleet_size * hardware_cost
 total_opex_monthly = fleet_size * monthly_sub
 
-# Экономия на ДТП в месяц на 1 авто
-monthly_accident_saving_per_car = (accident_rate * accident_cost * accident_reduction) / 12
+# Расчет эффектов на 1 машину для верхней панели структуры
+monthly_accident_saving_per_car = monthly_accident_saving_total / fleet_size
+monthly_fuel_saving_per_car = monthly_fuel_saving_total / fleet_size
 
-# Экономия на топливе в месяц на 1 авто
-monthly_fuel_cost_per_car = (annual_mileage / 100 * fuel_consumption * fuel_price) / 12
-monthly_fuel_saving_per_car = monthly_fuel_cost_per_car * fuel_economy
-
-# Суммарные финансовые результаты
-monthly_total_saving_per_car = monthly_accident_saving_per_car + monthly_fuel_saving_per_car + other_savings
-fleet_monthly_saving = monthly_total_saving_per_car * fleet_size
+# Итоговые показатели по всему парку
+fleet_monthly_saving = monthly_accident_saving_total + monthly_fuel_saving_total + (other_savings * fleet_size)
 net_monthly_benefit = fleet_monthly_saving - total_opex_monthly
 
-# Расчет окупаемости
+# Срок окупаемости
 if net_monthly_benefit > 0:
     payback_period = total_capex / net_monthly_benefit
 else:
@@ -121,8 +173,8 @@ else:
 # ==========================================
 with title_container:
     st.title("📊 Калькулятор окупаемости (ROI) видеоаналитики SKAI")
-    st.markdown(f"Текущий расчет построен для типа ТС: **{selected_preset}**")
-    st.caption("Результаты пересчитываются мгновенно при изменении любых параметров на панели настроек внизу страницы.")
+    st.markdown(f"Выбранный профиль техники: **{selected_preset}**")
+    st.caption("Меняйте параметры внизу страницы — верхняя панель результатов и графики пересчитываются мгновенно.")
     st.markdown("---")
 
 with metrics_container:
@@ -144,7 +196,7 @@ with effects_container:
     col_eff2.info(f"⛽ **Экономия топлива:**\n\n {monthly_fuel_saving_per_car:,.0f} ₽ / мес.")
     col_eff3.info(f"🧾 **Штрафы и скрытые расходы:**\n\n {other_savings:,.0f} ₽ / мес.")
     
-    st.markdown(f"**Полная экономия на 1 автомобиль:** {monthly_total_saving_per_car:,.0f} ₽ в месяц (до вычета абонентской платы).")
+    st.markdown(f"**Полная экономия на весь автопарк ({fleet_size} ТС):** {fleet_monthly_saving:,.0f} ₽ в месяц (до вычета абонентской платы).")
     st.markdown("---")
 
 with chart_container:
@@ -152,7 +204,6 @@ with chart_container:
     
     months = np.arange(0, 37)
     cash_flow = []
-    
     for m in months:
         if m == 0:
             cash_flow.append(-total_capex)
@@ -165,4 +216,3 @@ with chart_container:
     })
     
     st.line_chart(df_chart.set_index("Месяц"))
-    st.caption("Точка, где график пересекает нулевую отметку и уходит вверх — это точный момент полной окупаемости оборудования.")
