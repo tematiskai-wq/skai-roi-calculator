@@ -3,165 +3,245 @@ import pandas as pd
 import numpy as np
 
 # Настройка страницы
-st.set_page_config(page_title="SKAI Видеоаналитика: Калькулятор ROI", layout="wide", page_icon="📊")
+st.set_page_config(page_title="SKAI Платформа: Калькулятор окупаемости (ROI)", layout="wide", page_icon="📊")
 
 # ==========================================
 # 1. ОБЪЯВЛЕНИЕ КОНТЕЙНЕРОВ ДЛЯ ВЕРХА СТРАНИЦЫ
 # ==========================================
 title_container = st.container()
 metrics_container = st.container()
-effects_container = st.container()
+table_container = st.container()
 chart_container = st.container()
 
 # Визуальный разделитель перед настройками
 st.markdown("<br><br><br><hr style='border:1px solid #1E88E5;'>", unsafe_allow_html=True)
 
 # ==========================================
-# 2. ПАНЕЛЬ НАСТРОЕК И ПРЕСЕТОВ (НИЗ СТРАНИЦЫ)
+# 2. БАЗОВАЯ ДАННЫХ И ПРЕСЕТЫ ПО ТИПАМ ТС
 # ==========================================
-st.header("⚙️ Панель настроек и пресетов ТС")
-st.caption("Выберите шаблон под ваш тип транспорта или скорректируйте любые цифры. Справа от полей ввода сразу отображается сумма на весь автопарк.")
-
-# База данных пресетов (средние рыночные показатели)
 presets = {
     "🚛 Магистральный тягач (Фура)": {
-        "fleet_size": 50,
-        "mileage": 120000,
-        "consumption": 32.0,
-        "accident_rate": 15.0,
-        "accident_cost": 800000,
-        "hardware_cost": 160000,
-        "monthly_sub": 2000,
-        "accident_reduction": 55,
-        "fuel_economy": 4.0,
-        "other_savings": 2000
+        "fleet_size": 50, "mileage": 120000, "consumption": 32.0, "maintenance": 60000,
+        "accidents_year": 8, "accident_cost": 800000,
+        "video_capex": 120000, "video_opex": 2000, "video_eff": 55,
+        "base_capex": 15000, "base_opex": 400, "base_eff": 7,
+        "safe_capex": 10000, "safe_opex": 500, "safe_eff_to": 15, "safe_eff_acc": 15,
+        "fuel_capex": 25000, "fuel_opex": 600, "fuel_eff": 10,
+        "service_capex": 0, "service_opex": 1000, "service_eff": 800
     },
     "🏗️ Самосвал / Тяжелая спецтехника": {
-        "fleet_size": 30,
-        "mileage": 45000,
-        "consumption": 45.0,
-        "accident_rate": 25.0,
-        "accident_cost": 600000,
-        "hardware_cost": 170000,
-        "monthly_sub": 2000,
-        "accident_reduction": 50,
-        "fuel_economy": 5.0,
-        "other_savings": 1500
+        "fleet_size": 30, "mileage": 45000, "consumption": 45.0, "maintenance": 90000,
+        "accidents_year": 6, "accident_cost": 600000,
+        "video_capex": 130000, "video_opex": 2000, "video_eff": 50,
+        "base_capex": 15000, "base_opex": 400, "base_eff": 5,
+        "safe_capex": 10000, "safe_opex": 500, "safe_eff_to": 20, "safe_eff_acc": 10,
+        "fuel_capex": 30000, "fuel_opex": 600, "fuel_eff": 12,
+        "service_capex": 0, "service_opex": 1000, "service_eff": 600
     },
     "📦 Легкий коммерческий транспорт (LCV / Газель)": {
-        "fleet_size": 40,
-        "mileage": 60000,
-        "consumption": 13.0,
-        "accident_rate": 20.0,
-        "accident_cost": 300000,
-        "hardware_cost": 130000,
-        "monthly_sub": 1800,
-        "accident_reduction": 60,
-        "fuel_economy": 3.0,
-        "other_savings": 1200
+        "fleet_size": 40, "mileage": 60000, "consumption": 13.0, "maintenance": 35000,
+        "accidents_year": 7, "accident_cost": 300000,
+        "video_capex": 110000, "video_opex": 1800, "video_eff": 60,
+        "base_capex": 12000, "base_opex": 350, "base_eff": 8,
+        "safe_capex": 8000, "safe_opex": 400, "safe_eff_to": 12, "safe_eff_acc": 20,
+        "fuel_capex": 20000, "fuel_opex": 500, "fuel_eff": 8,
+        "service_capex": 0, "service_opex": 900, "service_eff": 500
     }
 }
 
-# Выбор пресета ТС
-selected_preset = st.selectbox("Шаблон под тип транспортного средства:", list(presets.keys()))
-p = presets[selected_preset]
+# ==========================================
+# 3. ПАНЕЛЬ НАСТРОЕК (НИЗ СТРАНИЦЫ)
+# ==========================================
+st.header("⚙️ Панель конфигурации проекта")
 
-# ------------------------------------------
-# ГЛАВНЫЙ МНОЖИТЕЛЬ: РАЗМЕР АВТОПАРКА
-# ------------------------------------------
-fleet_size = st.number_input("Размер автопарка (шт.) — базовый множитель для расчета итогов", min_value=1, value=p["fleet_size"], step=5)
-
-st.markdown("---")
-
-# ПОДРАЗДЕЛ: СТОИМОСТЬ СИСТЕМЫ
-st.subheader("💰 Стоимость решения SKAI и прямые расходы")
-
-col_hw1, col_hw2 = st.columns([2, 1])
-with col_hw1:
-    hardware_cost = st.number_input("Стоимость комплекта + монтаж на 1 авто (руб.)", min_value=0, value=p["hardware_cost"], step=5000)
-with col_hw2:
-    st.metric("Итого стартовые вложения (Capex)", f"{hardware_cost * fleet_size:,.0f} ₽".replace(",", " "))
-
-col_sub1, col_sub2 = st.columns([2, 1])
-with col_sub1:
-    monthly_sub = st.number_input("Абонентская плата за 1 авто в месяц (руб.)", min_value=0, value=p["monthly_sub"], step=100)
-with col_sub2:
-    st.metric("Итого абон. плата парка / мес (Opex)", f"{monthly_sub * fleet_size:,.0f} ₽".replace(",", " "))
+# Общие глобальные параметры
+col_g1, col_g2 = st.columns(2)
+with col_g1:
+    selected_preset = st.selectbox("1. Выберите шаблон под тип ТС:", list(presets.keys()))
+    p = presets[selected_preset]
+with col_g2:
+    fleet_size = st.number_input("2. Размер автопарка (шт.):", min_value=1, value=p["fleet_size"], step=5)
 
 st.markdown("---")
 
-# ПОДРАЗДЕЛ: ТОПЛИВО
-st.subheader("⛽ Топливо и пробег")
+# СЕКЦИЯ: ВЫБОР МОДУЛЕЙ СКАЙ ПЛАТФОРМЫ
+st.subheader("🧩 Конструктор модулей SKAI Платформы")
+st.caption("Отметьте модули, которые входят в периметр проекта. Ниже откроются только релевантные для них настройки.")
 
-col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 3])
-with col_f1:
-    annual_mileage = st.number_input("Пробег 1 авто в год (км)", min_value=1000, value=p["mileage"], step=5000)
-with col_f2:
-    fuel_consumption = st.number_input("Расход (л/100 km)", min_value=1.0, value=p["consumption"], step=0.5)
-with col_f3:
+available_modules = [
+    "Видеоаналитика",
+    "Базовый Мониторинг",
+    "Безопасное вождение",
+    "Контроль топлива",
+    "Сервис аналитики и реагирования"
+]
+
+# Создаем удобную сетку чекбоксов для выбора модулей
+m_cols = st.columns(5)
+selected_modules = []
+for i, module_name in enumerate(available_modules):
+    with m_cols[i]:
+        # По умолчанию выберем Видеоаналитику и Базовый мониторинг для демонстрации
+        default_checked = True if module_name in ["Видеоаналитика", "Базовый Мониторинг"] else False
+        if st.checkbox(module_name, value=default_checked):
+            selected_modules.append(module_name)
+
+if not selected_modules:
+    st.warning("⚠️ Выберите хотя бы один модуль SKAI Платформы для расчета окупаемости.")
+    st.stop()
+
+st.markdown("---")
+
+# ПОДРАЗДЕЛ: ГЛОБАЛЬНЫЕ ТЕКУЩИЕ ПОКАЗАТЕЛИ ПАРКА
+st.subheader("📊 Базовые операционные показатели парка")
+col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+with col_b1:
+    annual_mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p["mileage"], step=5000)
+with col_b2:
+    fuel_consumption = st.number_input("Расход топлива (л/100 км)", min_value=1.0, value=p["consumption"], step=0.5)
+with col_b3:
     fuel_price = st.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
-with col_f4:
-    # Базовые затраты парка на топливо в месяц ДО внедрения
-    monthly_fuel_cost_per_car = (annual_mileage / 100 * fuel_consumption * fuel_price) / 12
-    fleet_monthly_fuel_before = monthly_fuel_cost_per_car * fleet_size
-    st.metric("Текущие траты парка на топливо / мес", f"{fleet_monthly_fuel_before:,.0f} ₽".replace(",", " "))
+with col_b4:
+    annual_maintenance_cost = st.number_input("Затраты на ТО и ремонт 1 ТС в год (руб.)", min_value=0, value=p["maintenance"], step=5000)
 
-col_fe1, col_fe2 = st.columns([2, 1])
-with col_fe1:
-    fuel_economy = st.slider("Экономия топлива за счет контроля вождения (%)", min_value=0.0, max_value=20.0, value=p["fuel_economy"], step=0.5) / 100
-with col_fe2:
-    monthly_fuel_saving_total = fleet_monthly_fuel_before * fuel_economy
-    st.metric("Итого экономия на топливе / мес", f"{monthly_fuel_saving_total:,.0f} ₽".replace(",", " "))
+# Фоновые расчеты затрат до внедрения
+fleet_monthly_fuel_before = ((annual_mileage / 100 * fuel_consumption * fuel_price) / 12) * fleet_size
+fleet_monthly_maintenance_before = (annual_maintenance_cost / 12) * fleet_size
 
-st.markdown("---")
+# Инициализация переменных затрат и эффектов
+total_capex = 0
+total_opex_monthly = 0
+monthly_savings_dict = {}
 
-# ПОДРАЗДЕЛ: БЕЗОПАСНОСТЬ И ДТП
-st.subheader("🛡️ Безопасность и предотвращение ДТП")
+# Данные для сводной таблицы
+current_params_table = [
+    ["Размер автопарка", f"{fleet_size}", "шт."],
+    ["Тип ТС (Профиль)", selected_preset.split(" ")[1], "-"],
+    ["Пробег 1 ТС в год", f"{annual_mileage:,.0f}", "км"],
+    ["Базовый расход топлива", f"{fuel_consumption}", "л/100 км"],
+    ["Стоимость топлива", f"{fuel_price}", "руб./л"],
+    ["Затраты на ТО 1 ТС в год", f"{annual_maintenance_cost:,.0f}", "руб."]
+]
 
-col_acc1, col_acc2, col_acc3 = st.columns([3, 3, 3])
-with col_acc1:
-    accident_rate = st.slider("Доля машин, попадающих в ДТП за год (%)", min_value=0.0, max_value=100.0, value=p["accident_rate"], step=1.0) / 100
-with col_acc2:
-    accident_cost = st.number_input("Средний ущерб от одного ДТП (руб.)", min_value=1000, value=p["accident_cost"], step=50000)
-with col_acc3:
-    # Текущие средние убытки парка от ДТП в месяц
-    fleet_monthly_accident_before = (fleet_size * accident_rate * accident_cost) / 12
-    st.metric("Текущие убытки парка от ДТП / мес", f"{fleet_monthly_accident_before:,.0f} ₽".replace(",", " "))
+# ==========================================
+# 4. ДИНАМИЧЕСКИЕ НАСТРОЙКИ ПО КАЖДОМУ МОДУЛЮ
+# ==========================================
 
-col_acr1, col_acr2 = st.columns([2, 1])
-with col_acr1:
-    accident_reduction = st.slider("Снижение аварийности благодаря SKAI ADAS/DSM (%)", min_value=0, max_value=100, value=p["accident_reduction"], step=5) / 100
-with col_acr2:
-    monthly_accident_saving_total = fleet_monthly_accident_before * accident_reduction
-    st.metric("Итого сберегаем на ДТП / мес", f"{monthly_accident_saving_total:,.0f} ₽".replace(",", " "))
+# Модуль 1: Видеоаналитика
+if "Видеоаналитика" in selected_modules:
+    with st.expander("👁️ Настройки модуля: Видеоаналитика", expanded=True):
+        st.caption("ADAS/DSM детекция опасных состояний, засыпания, отвлечения внимания водителя.")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: v_capex = st.number_input("Capex: Оборудование + монтаж на 1 ТС (Видео)", value=p["video_capex"], step=5000)
+        with c2: v_opex = st.number_input("Opex: Лицензия в месяц за 1 ТС (Видео)", value=p["video_opex"], step=100)
+        with c3: accidents_year = st.number_input("Количество ДТП в автопарке в год (всего шт.)", min_value=0, value=p["accidents_year"], step=1)
+        with c4: accident_cost = st.number_input("Средний ущерб от одного ДТП (руб.)", min_value=0, value=p["accident_cost"], step=50000)
+        
+        v_eff = st.slider("Снижение аварийности благодаря SKAI ADAS/DSM (%)", min_value=0, max_value=100, value=p["video_eff"], step=5) / 100
+        
+        # Расчет эффекта видеоаналитики
+        fleet_monthly_accident_before = (accidents_year * accident_cost) / 12
+        v_saving = fleet_monthly_accident_before * v_eff
+        
+        total_capex += v_capex * fleet_size
+        total_opex_monthly += v_opex * fleet_size
+        monthly_savings_dict["Видеоаналитика"] = v_saving
+        
+        current_params_table.extend([
+            ["Количество ДТП в парке в год", f"{accidents_year}", "шт."],
+            ["Средний ущерб от 1 ДТП", f"{accident_cost:,.0f}", "руб."],
+            ["Эффективность снижения ДТП (Видео)", f"{v_eff*100:.0f}", "%"]
+        ])
 
-st.markdown("---")
+# Модуль 2: Базовый Мониторинг
+if "Базовый Мониторинг" in selected_modules:
+    with st.expander("📍 Настройки модуля: Базовый Мониторинг", expanded=True):
+        st.caption("Контроль маршрутов, геозоны, исключение «левых» рейсов и нецелевого использования ТС.")
+        c1, c2, c3 = st.columns(3)
+        with c1: b_capex = st.number_input("Capex: Оборудование + монтаж на 1 ТС (Мониторинг)", value=p["base_capex"], step=1000)
+        with c2: b_opex = st.number_input("Opex: ПО в месяц за 1 ТС (Мониторинг)", value=p["base_opex"], step=50)
+        with c3: b_eff = st.slider("Сокращение нецелевого пробега и простоев (%)", min_value=0.0, max_value=25.0, value=p["base_eff"], step=0.5) / 100
+        
+        # Базовый мониторинг сокращает общий пробег, уменьшая траты на топливо и пропорционально износ (ТО)
+        b_saving = (fleet_monthly_fuel_before + fleet_monthly_maintenance_before) * b_eff
+        
+        total_capex += b_capex * fleet_size
+        total_opex_monthly += b_opex * fleet_size
+        monthly_savings_dict["Базовый Мониторинг"] = b_saving
+        
+        current_params_table.extend([
+            ["Сокращение нецелевого пробега", f"{b_eff*100:.1f}", "%"]
+        ])
 
-# ПОДРАЗДЕЛ: СКРЫТЫЕ ИЗДЕРЖКИ
-st.subheader("🧾 Дополнительные скрытые издержки")
+# Модуль 3: Безопасное вождение
+if "Безопасное вождение" in selected_modules:
+    with st.expander("🛡️ Настройки модуля: Безопасное вождение", expanded=True):
+        st.caption("Телематический скоринг, фиксация резких ускорений, торможений и опасных перестроений.")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: sd_capex = st.number_input("Capex: Модуль на 1 ТС (Безопасность)", value=p["safe_capex"], step=1000)
+        with c2: sd_opex = st.number_input("Opex: Подписка в месяц за 1 ТС (Безопасность)", value=p["safe_opex"], step=50)
+        with c3: sd_eff_to = st.slider("Экономия на ремонте/ТО за счет бережной езды (%)", min_value=0, max_value=40, value=p["safe_eff_to"], step=5) / 100
+        with c4: sd_eff_acc = st.slider("Доп. снижение ДТП за счет контроля ПДД (%)", min_value=0, max_value=40, value=p["safe_eff_acc"], step=5) / 100
+        
+        # Бережное вождение снижает затраты на ТО, а также вносит вклад в предотвращение ДТП
+        sd_saving_to = fleet_monthly_maintenance_before * sd_eff_to
+        # Если видеоаналитики нет, то считаем от полной базы ДТП, если есть — от остатка после видеоаналитики
+        base_accident_for_sd = (fleet_monthly_accident_before - v_saving) if "Видеоаналитика" in selected_modules else fleet_monthly_accident_before
+        sd_saving_acc = base_accident_for_sd * sd_eff_acc
+        
+        sd_saving = sd_saving_to + sd_saving_acc
+        total_capex += sd_capex * fleet_size
+        total_opex_monthly += sd_opex * fleet_size
+        monthly_savings_dict["Безопасное вождение"] = sd_saving
+        
+        current_params_table.extend([
+            ["Экономия на ТО от стиля езды", f"{sd_eff_to*100:.0f}", "%"],
+            ["Доп. снижение ДТП (Скоринг)", f"{sd_eff_acc*100:.0f}", "%"]
+        ])
 
-col_oth1, col_oth2 = st.columns([2, 1])
-with col_oth1:
-    other_savings = st.number_input("Экономия на штрафах и прочих рисках на 1 авто в месяц (руб.)", min_value=0, value=p["other_savings"], step=100)
-with col_oth2:
-    st.metric("Итого экономия на штрафах / мес", f"{other_savings * fleet_size:,.0f} ₽".replace(",", " "))
+# Модуль 4: Контроль топлива
+if "Контроль топлива" in selected_modules:
+    with st.expander("⛽ Настройки модуля: Контроль топлива", expanded=True):
+        st.caption("ML-аналитика заправок, выявление скрытых сливов, недоливов на АЗС и махинаций с топливными картами.")
+        c1, c2, c3 = st.columns(3)
+        with c1: f_capex = st.number_input("Capex: ДУТ + тарировка на 1 ТС (Топливо)", value=p["fuel_capex"], step=2000)
+        with c2: f_opex = st.number_input("Opex: ML-модуль анализа ГСМ / мес за 1 ТС", value=p["fuel_opex"], step=50)
+        with c3: f_eff = st.slider("Прямая экономия ГСМ (исключение махинаций и сливов) (%)", min_value=0.0, max_value=25.0, value=p["fuel_eff"], step=0.5) / 100
+        
+        f_saving = fleet_monthly_fuel_before * f_eff
+        total_capex += f_capex * fleet_size
+        total_opex_monthly += f_opex * fleet_size
+        monthly_savings_dict["Контроль топлива"] = f_saving
+        
+        current_params_table.extend([
+            ["Экономия ГСМ от контроля сливов", f"{f_eff*100:.1f}", "%"]
+        ])
+
+# Модуль 5: Сервис аналитики и реагирования
+if "Сервис аналитики и реагирования" in selected_modules:
+    with st.expander("🎧 Настройки: Сервис аналитики и реагирования", expanded=True):
+        st.caption("Аутсорсинг Ситуационного центра SKAI: разбор инцидентов экспертами, регулярные заказные отчеты.")
+        c1, c2, c3 = st.columns(3)
+        with c1: s_capex = st.number_input("Capex: Настройка интеграции (Сервис)", value=p["service_capex"], step=1000)
+        with c2: s_opex = st.number_input("Opex: Сопровождение диспетчерами / мес за 1 ТС", value=p["service_opex"], step=100)
+        with c3: s_eff_val = st.number_input("Снижение скрытых издержек на 1 ТС в месяц (штрафы, администрирование) (руб.)", value=p["service_eff"], step=100)
+        
+        s_saving = s_eff_val * fleet_size
+        total_capex += s_capex * fleet_size
+        total_opex_monthly += s_opex * fleet_size
+        monthly_savings_dict["Сервис аналитики и реагирования"] = s_saving
+        
+        current_params_table.extend([
+            ["Снижение скрытых издержек на 1 ТС", f"{s_eff_val:,.0f}", "руб./мес."]
+        ])
 
 
 # ==========================================
-# 3. МАТЕМАТИЧЕСКИЙ ПЕРЕСЧЕТ ДЛЯ ФИНАЛЬНЫХ СУММ
+# 5. МАТЕМАТИЧЕСКИЙ ПЕРЕСЧЕТ РЕЗУЛЬТАТОВ
 # ==========================================
-total_capex = fleet_size * hardware_cost
-total_opex_monthly = fleet_size * monthly_sub
-
-# Расчет эффектов на 1 машину для верхней панели структуры
-monthly_accident_saving_per_car = monthly_accident_saving_total / fleet_size
-monthly_fuel_saving_per_car = monthly_fuel_saving_total / fleet_size
-
-# Итоговые показатели по всему парку
-fleet_monthly_saving = monthly_accident_saving_total + monthly_fuel_saving_total + (other_savings * fleet_size)
+fleet_monthly_saving = sum(monthly_savings_dict.values())
 net_monthly_benefit = fleet_monthly_saving - total_opex_monthly
 
-# Срок окупаемости
 if net_monthly_benefit > 0:
     payback_period = total_capex / net_monthly_benefit
 else:
@@ -169,12 +249,12 @@ else:
 
 
 # ==========================================
-# 4. ЗАПОЛНЕНИЕ ВЕРХНИХ КОНТЕЙНЕРОВ (РЕЗУЛЬТАТЫ)
+# 6. ЗАПОЛНЕНИЕ ВЕРХНИХ КОНТЕЙНЕРОВ (РЕЗУЛЬТАТЫ И ГРАФИКИ)
 # ==========================================
 with title_container:
-    st.title("📊 Калькулятор окупаемости (ROI) видеоаналитики SKAI")
-    st.markdown(f"Выбранный профиль техники: **{selected_preset}**")
-    st.caption("Меняйте параметры внизу страницы — верхняя панель результатов и графики пересчитываются мгновенно.")
+    st.title("📊 SKAI платформа: калькулятор окупаемости (ROI)")
+    st.markdown(f"Выбранный профиль техники: **{selected_preset}** | Активных модулей платформы: **{len(selected_modules)}**")
+    st.caption("Настраивайте параметры и состав платформы внизу страницы — результаты обновляются налету.")
     st.markdown("---")
 
 with metrics_container:
@@ -184,35 +264,36 @@ with metrics_container:
     m2.metric("Чистая прибыль парка в месяц (после Opex)", f"{net_monthly_benefit:,.0f} ₽".replace(",", " "))
     
     if payback_period != float('inf'):
-        m3.metric("Срок окупаемости системы", f"{payback_period:.1f} мес.")
+        m3.metric("Срок окупаемости платформы", f"{payback_period:.1f} мес.")
     else:
-        m3.metric("Срок окупаемости системы", "Проект не окупается при текущих настройках")
+        m3.metric("Срок окупаемости платформы", "Проект не окупается при текущих настройках")
     st.markdown("---")
 
-with effects_container:
-    st.subheader("🔍 Структура ежемесячной экономии (на 1 автомобиль)")
-    col_eff1, col_eff2, col_eff3 = st.columns(3)
-    col_eff1.info(f"🛡️ **Предотвращение ДТП:**\n\n {monthly_accident_saving_per_car:,.0f} ₽ / мес.")
-    col_eff2.info(f"⛽ **Экономия топлива:**\n\n {monthly_fuel_saving_per_car:,.0f} ₽ / мес.")
-    col_eff3.info(f"🧾 **Штрафы и скрытые расходы:**\n\n {other_savings:,.0f} ₽ / мес.")
-    
-    st.markdown(f"**Полная экономия на весь автопарк ({fleet_size} ТС):** {fleet_monthly_saving:,.0f} ₽ в месяц (до вычета абонентской платы).")
+with table_container:
+    st.subheader("📋 Сводная таблица текущих показателей расчета")
+    df_params = pd.DataFrame(current_params_table, columns=["Параметр расчета", "Текущее значение", "Ед. изм."])
+    st.dataframe(df_params, use_container_width=True, hide_index=True)
     st.markdown("---")
 
 with chart_container:
-    st.subheader("📈 График кумулятивного денежного потока (36 месяцев)")
+    st.subheader("📈 График кумулятивного эффекта и баланса проекта (36 месяцев)")
+    st.caption("Линия баланса показывает окупаемость с учетом стартовых затрат. Линии модулей показывают чистую накопленную экономию от каждого решения (кликните на имя в легенде, чтобы спрятать линию).")
     
     months = np.arange(0, 37)
-    cash_flow = []
+    chart_data_dict = {"Месяц": months}
+    
+    # 1. Считаем общий баланс проекта (минус капекс на старте + рост прибыли)
+    project_balance = []
     for m in months:
         if m == 0:
-            cash_flow.append(-total_capex)
+            project_balance.append(-total_capex)
         else:
-            cash_flow.append(cash_flow[m-1] + net_monthly_benefit)
-            
-    df_chart = pd.DataFrame({
-        "Месяц": months,
-        "Баланс проекта (₽)": cash_flow
-    })
+            project_balance.append(project_balance[m-1] + net_monthly_benefit)
+    chart_data_dict["Общий баланс проекта (с учетом затрат)"] = project_balance
     
-    st.line_chart(df_chart.set_index("Месяц"))
+    # 2. Добавляем на график индивидуальные кумулятивные кривые экономии по каждому продукту
+    for module_name, monthly_save_val in monthly_savings_dict.items():
+        chart_data_dict[f"Эффект: {module_name}"] = [monthly_save_val * m for m in months]
+        
+    df_chart = pd.DataFrame(chart_data_dict).set_index("Месяц")
+    st.line_chart(df_chart)
