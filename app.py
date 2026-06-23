@@ -17,7 +17,7 @@ chart_container = st.container()
 st.markdown("<br><br><br><hr style='border:1px solid #1E88E5;'>", unsafe_allow_html=True)
 
 # ==========================================
-# 2. БАЗОВАЯ ДАННЫХ И ПРЕСЕТЫ ПО ТИПАМ ТС
+# 2. БАЗА ДАННЫХ И ПРЕСЕТЫ ПО ТИПАМ ТС
 # ==========================================
 presets = {
     "🚛 Магистральный тягач (Фура)": {
@@ -54,11 +54,11 @@ def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
 
 # ==========================================
-# 3. ПАНЕЛЬ НАСТРОЕК (НИЗ СТРАНИЦЫ) - ТЕПЕРЬ В 2 КОЛОНКИ
+# 3. ПАНЕЛЬ КОНФИГУРАЦИИ ПРОЕКТА
 # ==========================================
 st.header("⚙️ Панель конфигурации проекта")
 
-# Верхний селектор пресетов и выбор модулей на всю ширину
+# Базовые параметры: Тип ТС и Количество
 col_preset, col_fleet = st.columns([2, 1])
 with col_preset:
     selected_preset = st.selectbox("Шаблон под тип ТС:", list(presets.keys()))
@@ -66,6 +66,39 @@ with col_preset:
 with col_fleet:
     fleet_size = st.number_input("Размер автопарка (шт.):", min_value=1, value=p["fleet_size"], step=5)
 
+st.markdown("<br>", unsafe_allow_html=True)
+st.subheader("📊 Текущие показатели парка (До внедрения)")
+
+# Распределение операционной базы в 2 колонки
+base_col1, base_col2 = st.columns(2)
+
+with base_col1:
+    st.markdown("**Пробег и техническое обслуживание**")
+    in_c1, out_c1 = st.columns([3, 2])
+    with in_c1:
+        annual_mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p["mileage"], step=5000)
+    with out_c1:
+        st.metric("Общий пробег парка / год", f"{fmt(annual_mileage * fleet_size)} км")
+        
+    in_c2, out_c2 = st.columns([3, 2])
+    with in_c2:
+        annual_maintenance_cost = st.number_input("Затраты на ТО 1 ТС в год (руб.)", min_value=0, value=p["maintenance"], step=5000)
+    with out_c2:
+        fleet_monthly_maintenance_before = (annual_maintenance_cost / 12) * fleet_size
+        st.metric("Расходы на ТО парка / мес", f"{fmt(fleet_monthly_maintenance_before)} ₽")
+
+with base_col2:
+    st.markdown("**Потребление и стоимость ГСМ**")
+    in_c3, out_c3 = st.columns([3, 2])
+    with in_c3:
+        fuel_consumption = st.number_input("Расход топлива (л/100 км)", min_value=1.0, value=p["consumption"], step=0.5)
+        fuel_price = st.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
+    with out_c3:
+        fleet_monthly_fuel_before = ((annual_mileage / 100 * fuel_consumption * fuel_price) / 12) * fleet_size
+        st.metric("Затраты на ГСМ парка / мес", f"{fmt(fleet_monthly_fuel_before)} ₽")
+
+# Перенос конструктора модулей ниже базовых показателей
+st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🧩 Конструктор модулей SKAI Платформы")
 available_modules = [
     "Видеоаналитика", "Базовый Мониторинг", "Безопасное вождение", 
@@ -90,59 +123,31 @@ total_capex = 0
 total_opex_monthly = 0
 monthly_savings_dict = {}
 
-# Начало формирования таблицы численных параметров
+# Формирование аналитической таблицы численных параметров
 current_params_table = [
     ["Размер автопарка (масштабирует все затраты и эффекты)", f"{fleet_size}", "шт."],
     ["Базовый профиль ТС (определяет стартовые коэффициенты экономии)", selected_preset.replace("🚛 ", "").replace("🏗️ ", "").replace("📦 ", ""), "Тип"],
+    ["Суммарный пробег всего автопарка за год", f"{fmt(annual_mileage * fleet_size)}", "км"],
+    ["Базовые затраты автопарка на ГСМ в месяц", f"{fmt(fleet_monthly_fuel_before)}", "руб."],
+    ["Базовые затраты автопарка на ТО и ремонт в месяц", f"{fmt(fleet_monthly_maintenance_before)}", "руб."]
 ]
 
-# РАЗДЕЛЕНИЕ НА 2 КОЛОНКИ ДЛЯ БЛОКОВ С РАСЧЕТОМ
+# РАЗДЕЛЕНИЕ НА 2 КОЛОНКИ ДЛЯ ПОДРОБНЫХ НАСТРОЕК ВЫБРАННЫХ МОДУЛЕЙ
 config_col1, config_col2 = st.columns(2)
 
 with config_col1:
-    st.subheader("📋 Операционная база и Мониторинг")
-    
-    with st.expander("📊 Текущие показатели парка (До внедрения)", expanded=True):
-        # Поле + Сумма на весь парк рядом
-        in_col, out_col = st.columns([3, 2])
-        with in_col:
-            annual_mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p["mileage"], step=5000)
-        with out_col:
-            st.metric("Общий пробег парка / год", f"{fmt(annual_mileage * fleet_size)} км")
-            
-        in_col, out_col = st.columns([3, 2])
-        with in_col:
-            fuel_consumption = st.number_input("Расход топлива (л/100 км)", min_value=1.0, value=p["consumption"], step=0.5)
-            fuel_price = st.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
-        with out_col:
-            fleet_monthly_fuel_before = ((annual_mileage / 100 * fuel_consumption * fuel_price) / 12) * fleet_size
-            st.metric("Затраты на ГСМ парка / мес", f"{fmt(fleet_monthly_fuel_before)} ₽")
-            
-        in_col, out_col = st.columns([3, 2])
-        with in_col:
-            annual_maintenance_cost = st.number_input("Затраты на ТО 1 ТС в год (руб.)", min_value=0, value=p["maintenance"], step=5000)
-        with out_col:
-            fleet_monthly_maintenance_before = (annual_maintenance_cost / 12) * fleet_size
-            st.metric("Расходы на ТО парка / мес", f"{fmt(fleet_monthly_maintenance_before)} ₽")
-
-    current_params_table.extend([
-        ["Суммарный пробег всего автопарка за год", f"{fmt(annual_mileage * fleet_size)}", "км"],
-        ["Базовые затраты автопарка на ГСМ в месяц", f"{fmt(fleet_monthly_fuel_before)}", "руб."],
-        ["Базовые затраты автопарка на ТО и ремонт в месяц", f"{fmt(fleet_monthly_maintenance_before)}", "руб."]
-    ])
-
     # МОДУЛЬ: ВИДЕОАНАЛИТИКА
     if "Видеоаналитика" in selected_modules:
         with st.expander("👁️ Модуль: Видеоаналитика", expanded=True):
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                v_capex = st.number_input("Capex оборудования на 1 ТС", value=p["video_capex"], step=5000)
+                v_capex = st.number_input("Capex оборудования на 1 ТС", value=p["video_capex"], step=5000, key="v_cap")
             with out_col:
                 st.metric("Итого Capex (Видео)", f"{fmt(v_capex * fleet_size)} ₽")
                 
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                v_opex = st.number_input("Opex лицензии на 1 ТС / мес", value=p["video_opex"], step=100)
+                v_opex = st.number_input("Opex лицензии на 1 ТС / мес", value=p["video_opex"], step=100, key="v_op")
             with out_col:
                 st.metric("Итого Opex (Видео) / мес", f"{fmt(v_opex * fleet_size)} ₽")
                 
@@ -172,13 +177,13 @@ with config_col1:
         with st.expander("📍 Модуль: Базовый Мониторинг", expanded=True):
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                b_capex = st.number_input("Capex трекера на 1 ТС", value=p["base_capex"], step=1000)
+                b_capex = st.number_input("Capex трекера на 1 ТС", value=p["base_capex"], step=1000, key="b_cap")
             with out_col:
                 st.metric("Итого Capex (Мониторинг)", f"{fmt(b_capex * fleet_size)} ₽")
                 
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                b_opex = st.number_input("Opex ПО на 1 ТС / мес", value=p["base_opex"], step=50)
+                b_opex = st.number_input("Opex ПО на 1 ТС / мес", value=p["base_opex"], step=50, key="b_op")
             with out_col:
                 st.metric("Итого Opex (Мониторинг) / мес", f"{fmt(b_opex * fleet_size)} ₽")
                 
@@ -195,20 +200,18 @@ with config_col1:
 
 
 with config_col2:
-    st.subheader("🛡️ Управление безопасностью, топливом и сервисы")
-
     # МОДУЛЬ: БЕЗОПАСНОЕ ВОЖДЕНИЕ
     if "Безопасное вождение" in selected_modules:
         with st.expander("🛡️ Модуль: Безопасное вождение", expanded=True):
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                sd_capex = st.number_input("Capex модуля безопасности на 1 ТС", value=p["safe_capex"], step=1000)
+                sd_capex = st.number_input("Capex модуля безопасности на 1 ТС", value=p["safe_capex"], step=1000, key="sd_cap")
             with out_col:
                 st.metric("Итого Capex (Безопасность)", f"{fmt(sd_capex * fleet_size)} ₽")
                 
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                sd_opex = st.number_input("Opex подписки на 1 ТС / мес", value=p["safe_opex"], step=50)
+                sd_opex = st.number_input("Opex подписки на 1 ТС / мес", value=p["safe_opex"], step=50, key="sd_op")
             with out_col:
                 st.metric("Итого Opex (Безопасность) / мес", f"{fmt(sd_opex * fleet_size)} ₽")
                 
@@ -231,16 +234,16 @@ with config_col2:
 
     # МОДУЛЬ: КОНТРОЛЬ ТОПЛИВА
     if "Контроль топлива" in selected_modules:
-        with st.expander("⛽ Монуль: Контроль топлива", expanded=True):
+        with st.expander("⛽ Модуль: Контроль топлива", expanded=True):
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                f_capex = st.number_input("Capex ДУТ + тарировка на 1 ТС", value=p["fuel_capex"], step=2000)
+                f_capex = st.number_input("Capex ДУТ + тарировка на 1 ТС", value=p["fuel_capex"], step=2000, key="f_cap")
             with out_col:
                 st.metric("Итого Capex (Топливо)", f"{fmt(f_capex * fleet_size)} ₽")
                 
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                f_opex = st.number_input("Opex ML-модуля на 1 ТС / мес", value=p["fuel_opex"], step=50)
+                f_opex = st.number_input("Opex ML-модуля на 1 ТС / мес", value=p["fuel_opex"], step=50, key="f_op")
             with out_col:
                 st.metric("Итого Opex (Топливо) / мес", f"{fmt(f_opex * fleet_size)} ₽")
                 
@@ -260,13 +263,13 @@ with config_col2:
         with st.expander("🎧 Модуль: Ситуационный центр (Аутсорсинг)", expanded=True):
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                s_capex = st.number_input("Capex настройки интеграции", value=p["service_capex"], step=1000)
+                s_capex = st.number_input("Capex настройки интеграции", value=p["service_capex"], step=1000, key="s_cap")
             with out_col:
                 st.metric("Итого Capex (Сервис)", f"{fmt(s_capex * fleet_size)} ₽")
                 
             in_col, out_col = st.columns([3, 2])
             with in_col:
-                s_opex = st.number_input("Opex диспетчеризации 1 ТС / мес", value=p["service_opex"], step=100)
+                s_opex = st.number_input("Opex диспетчеризации 1 ТС / мес", value=p["service_opex"], step=100, key="s_op")
             with out_col:
                 st.metric("Итого Opex (Сервис) / мес", f"{fmt(s_opex * fleet_size)} ₽")
                 
@@ -302,7 +305,7 @@ else:
 with title_container:
     st.title("📊 SKAI платформа: калькулятор окупаемости (ROI)")
     st.markdown(f"Выбранный профиль техники: **{selected_preset}** | Активных модулей платформы: **{len(selected_modules)}**")
-    st.caption("Изменяйте параметры в двух колонках ниже — результаты сверху пересчитываются мгновенно.")
+    st.caption("Изменяйте параметры конфигурации — результаты сверху пересчитываются мгновенно.")
     st.markdown("---")
 
 with metrics_container:
