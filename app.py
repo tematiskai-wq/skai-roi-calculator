@@ -160,7 +160,7 @@ if "Базовый Мониторинг" in selected_modules:
         c1, c2, c3 = st.columns(3)
         with c1: b_capex = st.number_input("Capex: Оборудование + монтаж на 1 ТС (Мониторинг)", value=p["base_capex"], step=1000)
         with c2: b_opex = st.number_input("Opex: ПО в месяц за 1 ТС (Мониторинг)", value=p["base_opex"], step=50)
-        with c3: b_eff = st.slider("Сокращение нецелевого пробега и простоев (%)", min_value=0.0, max_value=25.0, value=p["base_eff"], step=0.5) / 100
+        with c3: b_eff = st.slider("Сокращение нецелевого пробега и простоев (%)", min_value=0.0, max_value=25.0, value=float(p["base_eff"]), step=0.5) / 100
         
         # Базовый мониторинг сокращает общий пробег, уменьшая траты на топливо и пропорционально износ (ТО)
         b_saving = (fleet_monthly_fuel_before + fleet_monthly_maintenance_before) * b_eff
@@ -206,7 +206,7 @@ if "Контроль топлива" in selected_modules:
         c1, c2, c3 = st.columns(3)
         with c1: f_capex = st.number_input("Capex: ДУТ + тарировка на 1 ТС (Топливо)", value=p["fuel_capex"], step=2000)
         with c2: f_opex = st.number_input("Opex: ML-модуль анализа ГСМ / мес за 1 ТС", value=p["fuel_opex"], step=50)
-        with c3: f_eff = st.slider("Прямая экономия ГСМ (исключение махинаций и сливов) (%)", min_value=0.0, max_value=25.0, value=p["fuel_eff"], step=0.5) / 100
+        with c3: f_eff = st.slider("Прямая экономия ГСМ (исключение махинаций и сливов) (%)", min_value=0.0, max_value=25.0, value=float(p["fuel_eff"]), step=0.5) / 100
         
         f_saving = fleet_monthly_fuel_before * f_eff
         total_capex += f_capex * fleet_size
