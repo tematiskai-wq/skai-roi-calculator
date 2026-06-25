@@ -6,7 +6,7 @@ import numpy as np
 st.set_page_config(page_title="SKAI Платформа: Калькулятор окупаемости (ROI)", layout="wide", page_icon="📊")
 
 # ==========================================
-# 1. БАЗА ДАННЫХ И ПРЕСЕТЫ ПО ТИПАМ ТС
+# 1. БАЗА ДАННЫХ И ДЕФОЛТНЫЕ НАСТРОЙКИ ТС
 # ==========================================
 presets = {
     "🚛 Магистральный тягач (Фура)": {
@@ -42,23 +42,53 @@ def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
 
 # ==========================================
-# 2. СЕКЦИЯ САЙДБАРА (КОНФИГУРАЦИЯ СМЕШАННОГО ПАРКА)
+# 2. СЕКЦИЯ САЙДБАРА: КОНФИГУРАЦИЯ ТИПОВ ТС
 # ==========================================
 st.sidebar.header("⚙️ Параметры и конфигурация")
+st.sidebar.subheader("🚚 Состав и параметры ТС")
 
-st.sidebar.subheader("🚚 Состав автопарка (укажите шт.)")
 fleet_quantities = {}
-# По умолчанию выставляем стартовый состав для демонстрации
+custom_fleet_params = {}
+
+# Стартовые значения количества машин для демонстрации
 default_qtys = {
     "🚛 Магистральный тягач (Фура)": 30,
     "🏗️ Самосвал / Тяжелая спецтехника": 10,
     "📦 Легкий коммерческий транспорт (LCV / Газель)": 15
 }
 
-for preset_name in presets.keys():
-    qty = st.sidebar.number_input(f"{preset_name}:", min_value=0, value=default_qtys[preset_name], step=5)
+fuel_price = st.sidebar.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
+st.sidebar.markdown("---")
+
+# Цикл создания настроек для каждого типа ТС
+for name, p_default in presets.items():
+    qty = st.sidebar.number_input(f"{name} (кол-во, шт):", min_value=0, value=default_qtys[name], step=5)
+    
     if qty > 0:
-        fleet_quantities[preset_name] = qty
+        fleet_quantities[name] = qty
+        # Рассчитываем пропорциональный дефолт по ДТП под текущее кол-во машин
+        default_accidents = p_default["accidents_year"] * (qty / p_default["fleet_size"])
+        
+        # Компактный подблок настроек для конкретного типа техники
+        with st.sidebar.expander(f"🛠️ Настройки: {name.split(' ')[1]}", expanded=False):
+            mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
+            consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
+            maintenance = st.number_input("ТО 1 ТС в год (руб.)", min_value=0, value=p_default["maintenance"], step=5000, key=f"maint_{name}")
+            accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, value=float(default_accidents), step=0.5, key=f"acc_{name}")
+            acc_cost = st.number_input("Ущерб от 1 ДТП (руб.)", min_value=0, value=p_default["accident_cost"], step=50000, key=f"acost_{name}")
+        
+        # Сохраняем кастомные параметры группы
+        custom_fleet_params[name] = {
+            "qty": qty,
+            "mileage": mileage,
+            "consumption": consumption,
+            "maintenance": maintenance,
+            "accidents_year": accidents,
+            "accident_cost": acc_cost,
+            # Копируем экономику тарифов модулей СКАЙ для этого типа ТС
+            **{k: v for k, v in p_default.items() if "capex" in k or "opex" in k or "eff" in k}
+        }
+        st.sidebar.markdown("---")
 
 total_fleet_size = sum(fleet_quantities.values())
 
@@ -66,34 +96,24 @@ if total_fleet_size == 0:
     st.sidebar.warning("⚠️ Укажите количество хотя бы для одного типа ТС.")
     st.stop()
 
-# Динамический расчет базовых показателей парка до внедрения
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Показатели до внедрения")
-
+# Агрегация динамического базиса на основе кастомных параметров
 total_fuel_before = 0
 total_maint_before = 0
 weighted_accidents_year = 0
-weighted_accident_cost = 0
+total_accident_damage_before = 0
 
-# Собираем пропорциональные данные по ГСМ, ТО и ДТП исходя из структуры парка
-for name, qty in fleet_quantities.items():
-    p = presets[name]
-    # Топливо
-    total_fuel_before += ((p["mileage"] / 100 * p["consumption"] * 65.0) / 12) * qty
-    # ТО
-    total_maint_before += (p["maintenance"] / 12) * qty
-    # ДТП (масштабируем аварийность относительно базового размера парка в пресете)
-    ratio = qty / p["fleet_size"]
-    weighted_accidents_year += p["accidents_year"] * ratio
-    weighted_accident_cost += p["accident_cost"] * (qty / total_fleet_size)
+for name, cp in custom_fleet_params.items():
+    q = cp["qty"]
+    total_fuel_before += ((cp["mileage"] / 100 * cp["consumption"] * fuel_price) / 12) * q
+    total_maint_before += (cp["maintenance"] / 12) * q
+    weighted_accidents_year += cp["accidents_year"]
+    total_accident_damage_before += cp["accidents_year"] * cp["accident_cost"]
 
-# Показываем агрегированную базу в сайдбаре для контроля
-st.sidebar.caption(f"Всего ТС в парке: {total_fleet_size} шт.")
-st.sidebar.caption(f"Базовые ГСМ парка: {fmt(total_fuel_before)} ₽/мес.")
-st.sidebar.caption(f"Базовое ТО парка: {fmt(total_maint_before)} ₽/мес.")
+weighted_accident_cost = (total_accident_damage_before / weighted_accidents_year) if weighted_accidents_year > 0 else 0
 
-# Конструктор технологических модулей
-st.sidebar.markdown("---")
+# ==========================================
+# 3. СЕКЦИЯ САЙДБАРА: ВЫБОР И НАСТРОЙКА МОДУЛЕЙ
+# ==========================================
 st.sidebar.subheader("🧩 Модули SKAI Платформы")
 
 available_modules = [
@@ -111,14 +131,13 @@ if not selected_modules:
     st.sidebar.warning("⚠️ Выберите хотя бы один модуль для расчета.")
     st.stop()
 
-# Вычисление средневзвешенных дефолтов для тонких настроек модулей
+# Функция расчета средневзвешенной стоимости тарифов внедрения
 def get_weighted_value(field):
     total = 0
-    for name, qty in fleet_quantities.items():
-        total += presets[name][field] * qty
+    for name, cp in custom_fleet_params.items():
+        total += cp[field] * cp["qty"]
     return total / total_fleet_size
 
-# Накопители для экономики проекта
 total_capex = 0
 total_opex_monthly = 0
 monthly_savings_dict = {}
@@ -126,7 +145,7 @@ monthly_savings_dict = {}
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔧 Тонкие настройки модулей")
 
-# Все блоки по умолчанию открыты (expanded=True)
+# ВСЕ БЛОКИ НАСТРОЕК МОДУЛЕЙ ПО УМОЛЧАНИЮ ОТКРЫТЫ (expanded=True)
 
 # МОДУЛЬ: ВИДЕОАНАЛИТИКА
 if "Видеоаналитика" in selected_modules:
@@ -137,11 +156,11 @@ if "Видеоаналитика" in selected_modules:
         
         v_capex = st.number_input("Capex оборудования на 1 ТС", value=int(v_capex_def), step=5000, key="v_cap")
         v_opex = st.number_input("Opex лицензии на 1 ТС / мес", value=int(v_opex_def), step=100, key="v_op")
-        accidents_year = st.number_input("Количество ДТП в парке в год", min_value=0.0, value=float(weighted_accidents_year), step=0.5)
-        accident_cost = st.number_input("Средний ущерб от 1 ДТП (руб)", min_value=0, value=int(weighted_accident_cost), step=50000)
+        accidents_input = st.number_input("Общее кол-во ДТП в год (база)", min_value=0.0, value=float(weighted_accidents_year), step=0.5)
+        accident_cost_input = st.number_input("Средний ущерб от 1 ДТП (руб)", min_value=0, value=int(weighted_accident_cost), step=50000)
         v_eff = st.slider("Снижение аварийности со SKAI (%)", min_value=0, max_value=100, value=int(v_eff_def), step=5) / 100
         
-        fleet_monthly_accident_before = (accidents_year * accident_cost) / 12
+        fleet_monthly_accident_before = (accidents_input * accident_cost_input) / 12
         v_saving = fleet_monthly_accident_before * v_eff
         
         total_capex += v_capex * total_fleet_size
@@ -179,7 +198,9 @@ if "Безопасное вождение" in selected_modules:
         sd_eff_acc = st.slider("Доп. снижение ДТП от скоринга (%)", min_value=0, max_value=40, value=int(sd_eff_acc_def), step=5) / 100
         
         sd_saving_to = total_maint_before * sd_eff_to
-        base_accident_for_sd = (fleet_monthly_accident_before - v_saving) if "Видеоаналитика" in selected_modules else (weighted_accidents_year * weighted_accident_cost / 12)
+        
+        # Если видеоаналитика включена, защитное вождение снижает остаточную аварийность
+        base_accident_for_sd = (fleet_monthly_accident_before - v_saving) if "Видеоаналитика" in selected_modules else (total_accident_damage_before / 12)
         sd_saving_acc = base_accident_for_sd * sd_eff_acc
         sd_saving = sd_saving_to + sd_saving_acc
         
@@ -222,7 +243,7 @@ if "Сервис аналитики и реагирования" in selected_mod
 
 
 # ==========================================
-# 3. ОСНОВНАЯ ЧАСТЬ СТРАНИЦЫ (РЕЗУЛЬТАТЫ)
+# 4. ОСНОВНАЯ ЧАСТЬ СТРАНИЦЫ (РЕЗУЛЬТАТЫ)
 # ==========================================
 fleet_monthly_saving = sum(monthly_savings_dict.values())
 net_monthly_benefit = fleet_monthly_saving - total_opex_monthly
@@ -232,14 +253,14 @@ if net_monthly_benefit > 0:
 else:
     payback_period = float('inf')
 
-st.title("📊 SKAI Платформа: Калькулятор ROI для смешанных автопарков")
+st.title("📊 SKAI Платформа: Калькулятор ROI под кастомный автопарк")
 
-# Краткое описание структуры выбранного парка
+# Отображение текущего состава парка
 fleet_structure_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
-st.markdown(f"Текущая структура проекта: {fleet_structure_str} | Всего: **{total_fleet_size} ТС**")
+st.markdown(f"Структура парка: {fleet_structure_str} | Всего: **{total_fleet_size} ТС**")
 st.markdown("---")
 
-# Метрики верхнего уровня
+# Финансовые метрики
 st.subheader("💰 Финансово-экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
 m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} ₽")
@@ -251,7 +272,7 @@ else:
     m3.metric("Срок окупаемости системы", "Проект не окупается")
 st.markdown("---")
 
-# Накопительный график (Примыкающие столбцы без наложения)
+# Накопительный график (Примыкающие столбцы)
 st.subheader("📈 Структура накопительного эффекта во времени (36 месяцев)")
 
 months = np.arange(1, 37)
@@ -262,24 +283,23 @@ for module_name, monthly_save_val in monthly_savings_dict.items():
 df_chart = pd.DataFrame(chart_data_dict, index=months)
 df_chart.index.name = "Месяц"
 
-# Использование st.bar_chart гарантирует строгое примыкание слоев без прозрачности и наложений
 st.bar_chart(df_chart)
 
 st.markdown(f"""
 > **💡 Анализ структуры ценности:**
-> * **Примыкание слоев:** Столбцы наглядно показывают структуру кумулятивного дохода. Каждый цвет — это изолированный финансовый вклад конкретного продукта, слои примыкают друг к другу строго вертикально.
-> * **Масштаб эффекта:** К 12-му месяцу платформа сберегает для автопарка в **{total_fleet_size} ТС** в общей сложности **{fmt(fleet_monthly_saving * 12)} ₽**, а к 36-му месяцу сумма чистого эффекта достигает **{fmt(fleet_monthly_saving * 36)} ₽**.
+> * **Индивидуальный расчет:** Экономический эффект рассчитан на основе персональных параметров (пробега, расхода, ТО) для каждого выбранного вами типа техники.
+> * **Масштаб эффекта:** К 12-му месяцу платформа сберегает для вашего уникального автопарка в **{total_fleet_size} ТС** в общей сложности **{fmt(fleet_monthly_saving * 12)} ₽**, а к 36-му месяцу сумма чистого эффекта достигает **{fmt(fleet_monthly_saving * 36)} ₽**.
 """)
 st.markdown("---")
 
-# Сводная таблица параметров
-st.subheader("📋 Детализированные параметры расчета")
+# Таблица детализации базовых параметров
+st.subheader("📋 Сводные исходные показатели (агрегированные на базе кастомных ТС)")
 current_params_table = [
-    ["Общий размер смешанного автопарка", f"{total_fleet_size}", "шт."],
-    ["Суммарные базовые затраты на топливо до внедрения", f"{fmt(total_fuel_before)}", "руб./мес."],
-    ["Суммарные базовые затраты на ремонт и ТО до внедрения", f"{fmt(total_maint_before)}", "руб./мес."],
-    ["Расчетная совокупная аварийность парка до внедрения", f"{weighted_accidents_year:.1f}", "ДТП/год"],
+    ["Общий размер настроенного автопарка", f"{total_fleet_size}", "шт."],
+    ["Рассчитанные затраты на топливо всей группы до внедрения", f"{fmt(total_fuel_before)}", "руб./мес."],
+    ["Рассчитанные затраты на ремонт и ТО всей группы до внедрения", f"{fmt(total_maint_before)}", "руб./мес."],
+    ["Совокупная стартовая аварийность парка (сумма по типам)", f"{weighted_accidents_year:.1f}", "ДТП/год"],
     ["Средневзвешенный ущерб от одного инцидента", f"{fmt(weighted_accident_cost)}", "руб."]
 ]
-df_params = pd.DataFrame(current_params_table, columns=["Параметр расчета", "Текущее значение", "Ед. изм."])
+df_params = pd.DataFrame(current_params_table, columns=["Параметр расчета", "Значение", "Ед. изм."])
 st.dataframe(df_params, use_container_width=True, hide_index=True)
