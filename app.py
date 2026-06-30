@@ -84,7 +84,7 @@ if total_fleet_size == 0:
     st.stop()
 
 # ==========================================
-# 3. СЕКЦИЯ САЙДБАРА: TCO, ПЕРСОНАЛ И ЛИЗИНГ
+# 3. СЕКЦИЯ САЙДБАРА: TCO, ПЕРСОНАЛ И СТРУКТУРА ПАРКА
 # ==========================================
 st.sidebar.subheader("💼 Управление TCO, персоналом и лизингом")
 
@@ -103,7 +103,11 @@ with st.sidebar.expander("🔍 Потери бэк-офиса, простои и
     manager_hourly_rate = st.number_input("Стоимость 1 часа работы бэк-офиса", value=500, step=50)
     time_manager_accident = st.number_input("Время менеджера на 1 ДТП (часов)", value=8, step=1)
     
-    st.markdown("**📜 Лизинг и штрафы**")
+    st.markdown("**📜 Условия владения и штрафы**")
+    # Новая настройка: структура владения парком
+    lease_share = st.slider("Доля лизинговых ТС в парке (%)", min_value=0, max_value=100, value=60, step=5)
+    st.caption(f"Собственных ТС в парке: {100 - lease_share}% ({round(total_fleet_size * (1 - lease_share/100))} шт.)")
+    
     lease_term = st.number_input("Стандартный срок лизинга (мес)", value=48, step=12)
     lease_return_cost = st.number_input("Выплаты лизинговой при возврате (на 1 ТС)", value=50000, step=5000)
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
@@ -142,7 +146,10 @@ for name, cp in custom_fleet_params.items():
     total_tco_accident_damage_before += cp["accidents_year"] * get_total_accident_cost(cp["accident_cost"])
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
-total_lease_risk_before = lease_risk_per_car_month * total_fleet_size
+
+# [ЛОГ] ИЗМЕНЕНИЕ ЛОГИКИ: Риски лизинга рассчитываются только на целевую долю парка
+leased_fleet_count = total_fleet_size * (lease_share / 100)
+total_lease_risk_before = lease_risk_per_car_month * leased_fleet_count
 
 # ==========================================
 # 4. СЕКЦИЯ САЙДБАРА: МОДУЛИ SKAI
@@ -221,7 +228,7 @@ if "Сервис аналитики и реагирования" in selected_mod
         savings_by_cat["disp"] += s_tco_saving
 
 # --- МОДУЛЬ: ВИДЕОАНАЛИТИКА ---
-if "Videoanalytics" in selected_modules or "Видеоаналитика" in selected_modules:
+if "Видеоаналитика" in selected_modules:
     with st.sidebar.expander("👁️ Модуль: Видеоаналитика", expanded=True):
         v_capex = st.number_input("Стоимость оборудования на 1 ТС", value=int(get_weighted_value("video_capex")), step=5000, key="v_cap")
         v_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("video_opex")), step=100, key="v_op")
@@ -294,7 +301,7 @@ if "Контроль топлива" in selected_modules:
 # ==========================================
 st.title("📊 SKAI Платформа: Расширенный калькулятор TCO & ROI")
 fleet_structure_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
-st.markdown(f"Текущая структура парка: {fleet_structure_str} | Всего: **{total_fleet_size} ТС**")
+st.markdown(f"Текущая структура парка: {fleet_structure_str} | Всего: **{total_fleet_size} ТС** (Лизинг: {lease_share}% / Собственные: {100 - lease_share}%)")
 st.markdown("---")
 
 # Главный переключатель режима отображения
@@ -337,7 +344,7 @@ tco_table_data = [
     ["Потери от простоя персонала и ТС при ДТП", fmt((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12), fmt(savings_by_cat["acc_tco"] if is_tco else 0), "Косвенный (TCO)"],
     ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
     ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"],
-    ["Риски выплат лизинговой (износ/возврат)", fmt(total_lease_risk_before), fmt(savings_by_cat["lease"] if is_tco else 0), "Косвенный (TCO)"]
+    [f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", fmt(total_lease_risk_before), fmt(savings_by_cat["lease"] if is_tco else 0), "Косвенный (TCO)"]
 ]
 
 df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", "Базовые затраты до внедрения (₽/мес)", "Прогноз экономии от SKAI (₽/мес)", "Тип фактора"])
@@ -354,17 +361,14 @@ months = np.arange(1, 37)
 chart_trends = {"Месяц": months}
 total_accumulated_track = np.zeros(36)
 
-# Рассчитываем трек окупаемости для каждого отдельного модуля
 for module_name, metrics in modules_payload.items():
     m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
     m_net_monthly = m_saving - metrics["opex"]
     
-    # Формируем массив накопительного итога по месяцам: (эффект * месяц) - первоначальный Capex
     m_track = [(m_net_monthly * m) - metrics["capex"] for m in months]
     chart_trends[module_name] = m_track
     total_accumulated_track += np.array(m_track)
 
-# Добавляем общую синергетическую линию, если выбрано несколько модулей
 if len(modules_payload) > 1:
     chart_trends["🚀 Платформа SKAI (Итоговый эффект)"] = total_accumulated_track
 
@@ -373,6 +377,6 @@ st.line_chart(df_chart)
 
 st.markdown(f"""
 > **💡 Как читать график вклада продуктов:**
-> * **Индивидуальный ROI:** Каждая линия показывает реальную скорость окупаемости конкретного решения с учетом его собственных стартовых единовременных затрат и ежемесячной абонентской платы (АП). Таким образом, сразу видно, какой продукт начинает генерировать чистую прибыль первым.
-> * **Эффект переключения моделей:** В режиме *«Полного TCO расчета»* кривые таких модулей, как *Базовый Мониторинг* и *Сервис аналитики и реагирования*, резко уходят вверх, так как они начинают учитывать оптимизацию ФОТ бэк-офиса, защиту от лизинговых штрафов и сокращение скрытых административных затрат.
+> * **Индивидуальный ROI:** Каждая линия показывает реальную скорость окупаемости конкретного решения с учетом его собственных стартовых единовременных затрат и ежемесячной абонентской платы (АП).
+> * **Эффект переключения моделей:** В режиме *«Полного TCO расчета»* кривые модулей адаптируются под структуру владения парком. Изменение ползунка доли лизинга напрямую корректирует верхний потенциал экономии для *Базового Мониторинга*, так как снижаются базовые риски нецелевых выплат лизингодателям.
 """)
