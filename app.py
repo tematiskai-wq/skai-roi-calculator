@@ -107,9 +107,15 @@ with st.sidebar.expander("🔍 Потери бэк-офиса, простои и
     lease_share = st.slider("Доля лизинговых ТС в парке (%)", min_value=0, max_value=100, value=60, step=5)
     st.caption(f"Собственных ТС в парке: {100 - lease_share}% ({round(total_fleet_size * (1 - lease_share/100))} шт.)")
     
-    # Добавлено min_value=1 для предотвращения передачи нуля из интерфейса
-    lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
-    lease_return_cost = st.number_input("Выплаты лизинговой при возврате (на 1 ТС)", value=50000, step=5000)
+    # [ДИНАМИЧЕСКОЕ СКРЫТИЕ ПОЛЕЙ ЛИЗИНГА]
+    if lease_share > 0:
+        lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
+        lease_return_cost = st.number_input("Выплаты лизинговой при возврате (на 1 ТС)", value=50000, step=5000)
+    else:
+        # Безопасные дефолты, чтобы не упали формулы
+        lease_term = 48
+        lease_return_cost = 0
+
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
     fine_avg_cost = st.number_input("Средняя стоимость 1 штрафа (руб)", value=500, step=100)
     time_manager_fine = st.number_input("Время на обработку 1 штрафа (часов)", value=0.5, step=0.1)
@@ -128,11 +134,10 @@ def get_total_accident_cost(direct_cost):
 
 fine_loss_per_car_month = (fines_per_car_year * (fine_avg_cost + (time_manager_fine * manager_hourly_rate))) / 12
 
-# [ФИКС ОШИБКИ]: Безопасный расчет с защитой от деления на ноль
 lease_risk_per_car_month = lease_return_cost / lease_term if lease_term > 0 else 0
 total_disp_fot_before = disp_qty * disp_salary
 
-# Базовые financial показатели ДО внедрения
+# Базовые финансовые показатели ДО внедрения
 total_fuel_before = 0
 total_maint_before = 0
 total_accidents_year = 0
@@ -193,7 +198,13 @@ if "Базовый Мониторинг" in selected_modules:
         eff_fuel = st.slider("Сокращение пробега и расхода ГСМ (%)", 0.0, 25.0, float(get_weighted_value("base_eff_fuel")), step=0.5) / 100
         eff_to = st.slider("Сокращение избыточного износа и ТО (%)", 0.0, 25.0, float(get_weighted_value("base_eff_to")), step=0.5) / 100
         eff_fines = st.slider("Сокращение числа штрафов (%)", 0, 100, int(get_weighted_value("base_eff_fines")), step=5) / 100
-        eff_lease = st.slider("Снижение выплат лизинговой (сохранение ТС) (%)", 0, 100, int(get_weighted_value("base_eff_lease")), step=5) / 100
+        
+        # [ДИНАМИЧЕСКОЕ СКРЫТИЕ СЛАЙДЕРА ЭФФЕКТА]
+        if lease_share > 0:
+            eff_lease = st.slider("Снижение выплат лизинговой (сохранение ТС) (%)", 0, 100, int(get_weighted_value("base_eff_lease")), step=5) / 100
+        else:
+            eff_lease = 0.0
+
         eff_acc = st.slider("Сокращение ДТП (контроль геозон) (%)", 0, 100, int(get_weighted_value("base_eff_acc")), step=5) / 100
 
         b_direct_saving = (total_fuel_before * eff_fuel) + (total_maint_before * eff_to) + ((total_direct_accident_damage_before / 12) * eff_acc)
@@ -345,9 +356,17 @@ tco_table_data = [
     ["Прямой ущерб от аварий / франшизы", fmt(total_direct_accident_damage_before / 12), fmt(savings_by_cat["acc_direct"]), "Прямой эффект"],
     ["Потери от простоя персонала и ТС при ДТП", fmt((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12), fmt(savings_by_cat["acc_tco"] if is_tco else 0), "Косвенный (TCO)"],
     ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
-    ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"],
-    [f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", fmt(total_lease_risk_before), fmt(savings_by_cat["lease"] if is_tco else 0), "Косвенный (TCO)"]
+    ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"]
 ]
+
+# [ДИНАМИЧЕСКИЙ ВЫВОД СТРОКИ В ТАБЛИЦУ]
+if lease_share > 0:
+    tco_table_data.append([
+        f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", 
+        fmt(total_lease_risk_before), 
+        fmt(savings_by_cat["lease"] if is_tco else 0), 
+        "Косвенный (TCO)"
+    ])
 
 df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", "Базовые затраты до внедрения (₽/мес)", "Прогноз экономии от SKAI (₽/мес)", "Тип фактора"])
 st.dataframe(df_tco, use_container_width=True, hide_index=True)
