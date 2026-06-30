@@ -104,11 +104,11 @@ with st.sidebar.expander("🔍 Потери бэк-офиса, простои и
     time_manager_accident = st.number_input("Время менеджера на 1 ДТП (часов)", value=8, step=1)
     
     st.markdown("**📜 Условия владения и штрафы**")
-    # Новая настройка: структура владения парком
     lease_share = st.slider("Доля лизинговых ТС в парке (%)", min_value=0, max_value=100, value=60, step=5)
     st.caption(f"Собственных ТС в парке: {100 - lease_share}% ({round(total_fleet_size * (1 - lease_share/100))} шт.)")
     
-    lease_term = st.number_input("Стандартный срок лизинга (мес)", value=48, step=12)
+    # Добавлено min_value=1 для предотвращения передачи нуля из интерфейса
+    lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
     lease_return_cost = st.number_input("Выплаты лизинговой при возврате (на 1 ТС)", value=50000, step=5000)
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
     fine_avg_cost = st.number_input("Средняя стоимость 1 штрафа (руб)", value=500, step=100)
@@ -127,10 +127,12 @@ def get_total_accident_cost(direct_cost):
     return direct_cost + downtime_loss + management_loss
 
 fine_loss_per_car_month = (fines_per_car_year * (fine_avg_cost + (time_manager_fine * manager_hourly_rate))) / 12
-lease_risk_per_car_month = lease_return_cost / lease_term
+
+# [ФИКС ОШИБКИ]: Безопасный расчет с защитой от деления на ноль
+lease_risk_per_car_month = lease_return_cost / lease_term if lease_term > 0 else 0
 total_disp_fot_before = disp_qty * disp_salary
 
-# Базовые финансовые показатели ДО внедрения
+# Базовые financial показатели ДО внедрения
 total_fuel_before = 0
 total_maint_before = 0
 total_accidents_year = 0
@@ -147,7 +149,7 @@ for name, cp in custom_fleet_params.items():
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
 
-# [ЛОГ] ИЗМЕНЕНИЕ ЛОГИКИ: Риски лизинга рассчитываются только на целевую долю парка
+# Риски лизинга рассчитываются только на целевую долю парка
 leased_fleet_count = total_fleet_size * (lease_share / 100)
 total_lease_risk_before = lease_risk_per_car_month * leased_fleet_count
 
