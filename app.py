@@ -1,4 +1,3 @@
-import streamlit as pd
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -276,7 +275,7 @@ if "Контроль топлива" in selected_modules:
             "direct": f_direct_saving,
             "tco": 0
         }
-        savings_by_cat["fuel"] += f_fuel_save = total_fuel_before * f_eff
+        savings_by_cat["fuel"] += f_direct_saving
 
 # ==========================================
 # 5. ОСНОВНАЯ ЧАСТЬ СТРАНИЦЫ (ИНТЕРФЕЙС)
