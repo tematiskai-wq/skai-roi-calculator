@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
 # Настройка страницы в строгом стиле
 st.set_page_config(page_title="Платформа SKAI: Расширенный калькулятор TCO и ROI", layout="wide")
@@ -135,7 +136,7 @@ fine_loss_per_car_month = (fines_per_car_year * (fine_avg_cost + (time_manager_f
 lease_risk_per_car_month = lease_return_cost / lease_term if lease_term > 0 else 0
 total_disp_fot_before = disp_qty * disp_salary
 
-# Базовые финансовые показатели ДО внедрения
+# Базовые financial показатели ДО внедрения
 total_fuel_before = 0
 total_maint_before = 0
 total_accidents_year = 0
@@ -354,45 +355,59 @@ st.dataframe(df_tco, use_container_width=True, hide_index=True)
 st.markdown("---")
 
 # ==========================================
-# 6. ВИЗУАЛИЗАЦИЯ ВКЛАДА ПРОДУКТОВ В ИТОГОВЫЙ ROI
+# 6. СОВМЕЩЕННАЯ ВИЗУАЛИЗАЦИЯ И КРУГОВАЯ ДИАГРАММА ДОЛЕЙ
 # ==========================================
 st.subheader(f"Анализ вклада продуктов в совокупный финансовый результат ({mode_title})")
 
-chart_col1, chart_col2 = st.columns(2)
+months = np.arange(1, 37)
+area_chart_data = []
+total_savings_by_module = {m_name: 0.0 for m_name in modules_payload.keys()}
 
-with chart_col1:
-    st.markdown("**Накопленный чистый эффект по месяцам (структура экономии)**")
-    
-    months = np.arange(1, 37)
-    area_chart_data = []
-    
-    for m in months:
-        row = {"Месяц": m}
-        for module_name, metrics in modules_payload.items():
-            m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-            m_net_monthly = m_saving - metrics["opex"]
-            # Считаем накопленную чистую маржу продукта к текущему месяцу
-            row[module_name] = max(0.0, m_net_monthly * m)
-        area_chart_data.append(row)
-        
-    df_area = pd.DataFrame(area_chart_data).set_index("Месяц")
-    st.area_chart(df_area, use_container_width=True)
-    st.caption("График иллюстрирует, как наполняется финансовая «копилка» парка. Толщина каждого цветового слоя отображает физический вклад конкретного решения в общую сумму сэкономленных средств.")
-
-with chart_col2:
-    st.markdown("**Итоговый чистый доход за 36 месяцев (за вычетом Capex)**")
-    
-    bar_chart_data = []
+for m in months:
+    row = {"Месяц": m}
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
         m_net_monthly = m_saving - metrics["opex"]
-        # Полный чистый доход за 3 года эксплуатации за вычетом первоначальных инвестиций
-        total_net_benefit_36 = (m_net_monthly * 36) - metrics["capex"]
-        bar_chart_data.append({
-            "Продукт": module_name,
-            "Чистая прибыль за 3 года (₽)": total_net_benefit_36
-        })
+        # Считаем чистую прибыль от продукта нарастающим итогом (без ухода ниже нуля для сохранения ровного стекинга областей)
+        accumulated_value = m_net_monthly * m
+        row[module_name] = max(0.0, accumulated_value)
         
-    df_bar = pd.DataFrame(bar_chart_data).set_index("Продукт")
-    st.bar_chart(df_bar, use_container_width=True)
-    st.caption("Сравнительный финансовый итог каждого модуля. Позволяет мгновенно оценить, какое из внедренных решений окупилось сильнее всего и принесло наибольший чистый ROI.")
+        if m == 36:
+            total_savings_by_module[module_name] = max(0.0, accumulated_value)
+            
+    area_chart_data.append(row)
+
+df_area = pd.DataFrame(area_chart_data).set_index("Месяц")
+
+# Разделение рабочего пространства на логические блоки в рамках одной секции
+chart_col1, chart_col2 = st.columns([2, 1])
+
+with chart_col1:
+    st.markdown("**Накопленный чистый эффект по месяцам (структура накопления)**")
+    st.area_chart(df_area, use_container_width=True)
+    st.caption("График иллюстрирует динамику формирования общей финансовой выгоды. Слои не перекрывают друг друга, а примыкают по вертикали, отражая точный вклад каждого продукта в общий объем сэкономленного бюджета на временной шкале.")
+
+with chart_col2:
+    st.markdown("**Долевая структура чистой прибыли за 36 месяцев**")
+    
+    df_pie = pd.DataFrame([
+        {"Продукт": k, "Общая чистая прибыль (₽)": v} for k, v in total_savings_by_module.items()
+    ])
+    
+    # Построение минималистичной интерактивной круговой диаграммы (Donut Chart) через Plotly
+    fig_pie = px.pie(
+        df_pie, 
+        values="Общая чистая прибыль (₽)", 
+        names="Продукт",
+        hole=0.4,
+        color_discrete_sequence=px.colors.qualitative.Muted
+    )
+    
+    fig_pie.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True)
+    st.caption("Распределение долей чистого финансового эффекта по продуктам. Позволяет мгновенно определить ключевые драйверы снижения совокупной стоимости владения (TCO).")
