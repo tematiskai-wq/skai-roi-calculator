@@ -368,7 +368,7 @@ for m in months:
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
         m_net_monthly = m_saving - metrics["opex"]
-        # Считаем чистую прибыль от продукта нарастающим итогом (без ухода ниже нуля для сохранения ровного стекинга областей)
+        # Считаем чистую прибыль от продукта нарастающим итогом
         accumulated_value = m_net_monthly * m
         row[module_name] = max(0.0, accumulated_value)
         
@@ -377,15 +377,34 @@ for m in months:
             
     area_chart_data.append(row)
 
-df_area = pd.DataFrame(area_chart_data).set_index("Месяц")
+# Для Plotly лучше оставить "Месяц" обычной колонкой, а не индексом
+df_area = pd.DataFrame(area_chart_data)
 
-# Разделение рабочего пространства на логические блоки в рамках одной секции
+# Разделение рабочего пространства на логические блоки
 chart_col1, chart_col2 = st.columns([2, 1])
 
 with chart_col1:
     st.markdown("**Накопленный чистый эффект по месяцам (структура накопления)**")
-    st.area_chart(df_area, use_container_width=True)
-    st.caption("График иллюстрирует динамику формирования общей финансовой выгоды. Слои не перекрывают друг друга, а примыкают по вертикали, отражая точный вклад каждого продукта в общий объем сэкономленного бюджета на временной шкале.")
+    
+    # Построение гарантированно накопительного (Stacked) графика через Plotly
+    fig_area = px.area(
+        df_area,
+        x="Месяц",
+        y=list(modules_payload.keys()),
+        color_discrete_sequence=px.colors.qualitative.Safe
+    )
+    
+    fig_area.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis_title="Месяц эксплуатации",
+        yaxis_title="Совокупная чистая прибыль (₽)",
+        hovermode="x unified",  # Показывает значения всех модулей одновременно при наведении
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
+    )
+    
+    st.plotly_chart(fig_area, use_container_width=True)
+    st.caption("График иллюстрирует динамику формирования общей финансовой выгоды. Слои жестко примыкают по вертикали (стекинг), отражая точный вклад каждого продукта на временной шкале без перекрытия.")
 
 with chart_col2:
     st.markdown("**Долевая структура чистой прибыли за 36 месяцев**")
@@ -394,7 +413,7 @@ with chart_col2:
         {"Продукт": k, "Общая чистая прибыль (₽)": v} for k, v in total_savings_by_module.items()
     ])
     
-    # Построение минималистичной интерактивной круговой диаграммы (Donut Chart) через Plotly
+    # Построение круговой диаграммы (Donut Chart) в том же стиле
     fig_pie = px.pie(
         df_pie, 
         values="Общая чистая прибыль (₽)", 
@@ -406,7 +425,7 @@ with chart_col2:
     fig_pie.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
     )
     
     st.plotly_chart(fig_pie, use_container_width=True)
