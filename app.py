@@ -237,18 +237,11 @@ if "Videoanalytics" in selected_modules or "Видеоаналитика" in sel
         v_capex = st.number_input("Стоимость оборудования на 1 ТС", value=int(get_weighted_value("video_capex")), step=5000, key="v_cap")
         v_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("video_opex")), step=100, key="v_op")
         
-        st.markdown("**Исходная аварийность для Видеоаналитики:**")
-        default_v_cost = int(total_direct_accident_damage_before / total_accidents_year) if total_accidents_year > 0 else 0
-        
-        v_accidents_year = st.number_input("Количество ДТП в год (парк)", value=float(total_accidents_year), step=1.0, key="v_acc_yr")
-        v_accident_cost = st.number_input("Средняя стоимость ремонта после ДТП (руб)", value=default_v_cost, step=50000, key="v_acc_cost")
-        
         v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, int(get_weighted_value("video_eff")), step=5) / 100
         
-        v_direct_damage_monthly = (v_accidents_year * v_accident_cost) / 12
-        v_downtime_loss = downtime_days * (employee_daily_cost + employee_daily_revenue)
-        v_management_loss = time_manager_accident * manager_hourly_rate
-        v_tco_damage_monthly = (v_accidents_year * (v_accident_cost + v_downtime_loss + v_management_loss)) / 12
+        # Данные берутся напрямую из глобальных вычислений на базе настроек ТС, исключая дублирование ввода
+        v_direct_damage_monthly = total_direct_accident_damage_before / 12
+        v_tco_damage_monthly = total_tco_accident_damage_before / 12
         
         v_direct_saving = v_direct_damage_monthly * v_eff
         v_tco_saving = (v_tco_damage_monthly - v_direct_damage_monthly) * v_eff
@@ -377,16 +370,13 @@ for m in months:
             
     area_chart_data.append(row)
 
-# Передаем датафрейм в Plotly
 df_area = pd.DataFrame(area_chart_data)
 
-# Разделение рабочего пространства на логические блоки
 chart_col1, chart_col2 = st.columns([2, 1])
 
 with chart_col1:
     st.markdown("**Динамика накопления сэкономленных средств по месяцам**")
     
-    # Построение накопительного графика (Stacked Area) через Plotly
     fig_area = px.area(
         df_area,
         x="Месяц",
@@ -413,7 +403,6 @@ with chart_col2:
         {"Продукт": k, "Совокупная экономия (₽)": v} for k, v in total_savings_by_module.items()
     ])
     
-    # Построение круговой диаграммы (Donut Chart) в единой палитре
     fig_pie = px.pie(
         df_pie, 
         values="Совокупная экономия (₽)", 
