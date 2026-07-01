@@ -354,30 +354,45 @@ st.dataframe(df_tco, use_container_width=True, hide_index=True)
 st.markdown("---")
 
 # ==========================================
-# 6. ГРАФИК С ПОДРОБНЫМ ВКЛАДОМ КАЖДОГО ПРОДУКТА
+# 6. ВИЗУАЛИЗАЦИЯ ВКЛАДА ПРОДУКТОВ В ИТОГОВЫЙ ROI
 # ==========================================
-st.subheader(f"Накопительный финансовый результат за 36 месяцев ({mode_title})")
+st.subheader(f"Анализ вклада продуктов в совокупный финансовый результат ({mode_title})")
 
-months = np.arange(1, 37)
-chart_trends = {"Месяц": months}
-total_accumulated_track = np.zeros(36)
+chart_col1, chart_col2 = st.columns(2)
 
-for module_name, metrics in modules_payload.items():
-    m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-    m_net_monthly = m_saving - metrics["opex"]
+with chart_col1:
+    st.markdown("**Накопленный чистый эффект по месяцам (структура экономии)**")
     
-    m_track = [(m_net_monthly * m) - metrics["capex"] for m in months]
-    chart_trends[module_name] = m_track
-    total_accumulated_track += np.array(m_track)
+    months = np.arange(1, 37)
+    area_chart_data = []
+    
+    for m in months:
+        row = {"Месяц": m}
+        for module_name, metrics in modules_payload.items():
+            m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
+            m_net_monthly = m_saving - metrics["opex"]
+            # Считаем накопленную чистую маржу продукта к текущему месяцу
+            row[module_name] = max(0.0, m_net_monthly * m)
+        area_chart_data.append(row)
+        
+    df_area = pd.DataFrame(area_chart_data).set_index("Месяц")
+    st.area_chart(df_area, use_container_width=True)
+    st.caption("График иллюстрирует, как наполняется финансовая «копилка» парка. Толщина каждого цветового слоя отображает физический вклад конкретного решения в общую сумму сэкономленных средств.")
 
-if len(modules_payload) > 1:
-    chart_trends["Платформа SKAI (Итоговый эффект)"] = total_accumulated_track
-
-df_chart = pd.DataFrame(chart_trends).set_index("Месяц")
-st.line_chart(df_chart)
-
-st.markdown(f"""
-> **Анализ графика ценности модулей:**
-> * **Индивидуальный ROI:** Каждая линия отражает скорость окупаемости конкретного решения с учетом его стартовых единовременных затрат и ежемесячной абонентской платы.
-> * **Эффект переключения моделей:** В режиме *«Полного TCO расчета»* кривые модулей адаптируются под структуру владения парком. Изменение ползунка доли лизинга корректирует верхний потенциал экономии для *Базового Мониторинга*, так как снижаются базовые риски нецелевых выплат лизингодателям.
-""")
+with chart_col2:
+    st.markdown("**Итоговый чистый доход за 36 месяцев (за вычетом Capex)**")
+    
+    bar_chart_data = []
+    for module_name, metrics in modules_payload.items():
+        m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
+        m_net_monthly = m_saving - metrics["opex"]
+        # Полный чистый доход за 3 года эксплуатации за вычетом первоначальных инвестиций
+        total_net_benefit_36 = (m_net_monthly * 36) - metrics["capex"]
+        bar_chart_data.append({
+            "Продукт": module_name,
+            "Чистая прибыль за 3 года (₽)": total_net_benefit_36
+        })
+        
+    df_bar = pd.DataFrame(bar_chart_data).set_index("Продукт")
+    st.bar_chart(df_bar, use_container_width=True)
+    st.caption("Сравнительный финансовый итог каждого модуля. Позволяет мгновенно оценить, какое из внедренных решений окупилось сильнее всего и принесло наибольший чистый ROI.")
