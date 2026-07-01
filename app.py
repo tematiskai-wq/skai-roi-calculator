@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
-# Настройка страницы в строгом стиле
+# Настройка страницы в строгом B2B стиле
 st.set_page_config(page_title="Платформа SKAI: Расширенный калькулятор TCO и ROI", layout="wide")
 
 # ==========================================
@@ -91,7 +91,7 @@ if total_fleet_size == 0:
 st.sidebar.subheader("Управление TCO, персоналом и лизингом")
 
 with st.sidebar.expander("Потери бэк-офиса, простои и лизинг", expanded=True):
-    st.caption("Параметры для расчета скрытых издержек компании (модель EBITDA)")
+    st.caption("Параметры для расчета скрытых издержек компании (модель оптимизации TCO)")
     emp_salary = st.number_input("Затраты на 1 сотрудника/водителя в месяц (ФОТ+налоги)", value=100000, step=5000)
     emp_revenue = st.number_input("Месячный доход/выработка от 1 сотрудника на ТС", value=1200000, step=50000)
     
@@ -136,7 +136,7 @@ fine_loss_per_car_month = (fines_per_car_year * (fine_avg_cost + (time_manager_f
 lease_risk_per_car_month = lease_return_cost / lease_term if lease_term > 0 else 0
 total_disp_fot_before = disp_qty * disp_salary
 
-# Базовые financial показатели ДО внедрения
+# Базовые финансовые показатели ДО внедрения
 total_fuel_before = 0
 total_maint_before = 0
 total_accidents_year = 0
@@ -232,7 +232,7 @@ if "Сервис аналитики и реагирования" in selected_mod
         savings_by_cat["disp"] += s_tco_saving
 
 # --- МОДУЛЬ: ВИДЕОАНАЛИТИКА ---
-if "Видеоаналитика" in selected_modules:
+if "Videoanalytics" in selected_modules or "Видеоаналитика" in selected_modules:
     with st.sidebar.expander("Модуль: Видеоаналитика", expanded=True):
         v_capex = st.number_input("Стоимость оборудования на 1 ТС", value=int(get_weighted_value("video_capex")), step=5000, key="v_cap")
         v_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("video_opex")), step=100, key="v_op")
@@ -310,7 +310,7 @@ calc_mode = st.radio(
 )
 
 is_tco = "Полный TCO" in calc_mode
-mode_title = "Полного TCO расчета" if is_tco else "Прямого эффекта"
+mode_title = "полного TCO расчета" if is_tco else "прямого эффекта"
 
 total_capex = sum(m["capex"] for m in modules_payload.values())
 total_opex_monthly = sum(m["opex"] for m in modules_payload.values())
@@ -325,12 +325,12 @@ payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 el
 st.subheader("Экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
 m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} ₽")
-m2.metric("Чистая прибыль парка / мес (после АП)", f"{fmt(net_monthly_benefit)} ₽")
-m3.metric("Срок окупаемости системы", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
+m2.metric("Сэкономленный бюджет / мес (чистый)", f"{fmt(net_monthly_benefit)} ₽")
+m3.metric("Срок окупаемости инвестиций", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
 
 st.markdown("---")
 
-st.subheader("Детализация влияния факторов на экономику автопарка (в месяц)")
+st.subheader("Детализация влияния факторов на издержки автопарка (в месяц)")
 
 tco_table_data = [
     ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
@@ -357,7 +357,7 @@ st.markdown("---")
 # ==========================================
 # 6. СОВМЕЩЕННАЯ ВИЗУАЛИЗАЦИЯ И КРУГОВАЯ ДИАГРАММА ДОЛЕЙ
 # ==========================================
-st.subheader(f"Анализ вклада продуктов в совокупный финансовый результат ({mode_title})")
+st.subheader(f"Анализ влияния продуктов на снижение издержек ({mode_title})")
 
 months = np.arange(1, 37)
 area_chart_data = []
@@ -368,7 +368,7 @@ for m in months:
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
         m_net_monthly = m_saving - metrics["opex"]
-        # Считаем чистую прибыль от продукта нарастающим итогом
+        # Считаем сохраненные средства нарастающим итогом
         accumulated_value = m_net_monthly * m
         row[module_name] = max(0.0, accumulated_value)
         
@@ -377,16 +377,16 @@ for m in months:
             
     area_chart_data.append(row)
 
-# Для Plotly лучше оставить "Месяц" обычной колонкой, а не индексом
+# Передаем датафрейм в Plotly
 df_area = pd.DataFrame(area_chart_data)
 
 # Разделение рабочего пространства на логические блоки
 chart_col1, chart_col2 = st.columns([2, 1])
 
 with chart_col1:
-    st.markdown("**Накопленный чистый эффект по месяцам (структура накопления)**")
+    st.markdown("**Динамика накопления сэкономленных средств по месяцам**")
     
-    # Построение гарантированно накопительного (Stacked) графика через Plotly
+    # Построение накопительного графика (Stacked Area) через Plotly
     fig_area = px.area(
         df_area,
         x="Месяц",
@@ -396,27 +396,27 @@ with chart_col1:
     
     fig_area.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
-        xaxis_title="Месяц эксплуатации",
-        yaxis_title="Совокупная чистая прибыль (₽)",
-        hovermode="x unified",  # Показывает значения всех модулей одновременно при наведении
+        xaxis_title="Месяц эксплуатации системы",
+        yaxis_title="Совокупная экономия (₽)",
+        hovermode="x unified",
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
     )
     
     st.plotly_chart(fig_area, use_container_width=True)
-    st.caption("График иллюстрирует динамику формирования общей финансовой выгоды. Слои жестко примыкают по вертикали (стекинг), отражая точный вклад каждого продукта на временной шкале без перекрытия.")
+    st.caption("График иллюстрирует динамику удержания средств. Слои жестко примыкают по вертикали, отражая вклад каждого продукта в общий объем сохраненного бюджета компании на временной шкале.")
 
 with chart_col2:
-    st.markdown("**Долевая структура чистой прибыли за 36 месяцев**")
+    st.markdown("**Структура совокупной экономии за 36 месяцев**")
     
     df_pie = pd.DataFrame([
-        {"Продукт": k, "Общая чистая прибыль (₽)": v} for k, v in total_savings_by_module.items()
+        {"Продукт": k, "Совокупная экономия (₽)": v} for k, v in total_savings_by_module.items()
     ])
     
-    # Построение круговой диаграммы (Donut Chart) в том же стиле
+    # Построение круговой диаграммы (Donut Chart) в единой палитре
     fig_pie = px.pie(
         df_pie, 
-        values="Общая чистая прибыль (₽)", 
+        values="Совокупная экономия (₽)", 
         names="Продукт",
         hole=0.4,
         color_discrete_sequence=px.colors.qualitative.Safe
@@ -429,4 +429,4 @@ with chart_col2:
     )
     
     st.plotly_chart(fig_pie, use_container_width=True)
-    st.caption("Распределение долей чистого финансового эффекта по продуктам. Позволяет мгновенно определить ключевые драйверы снижения совокупной стоимости владения (TCO).")
+    st.caption("Распределение долей сохраненного бюджета по продуктам. Позволяет мгновенно определить ключевые драйверы снижения совокупной стоимости владения (TCO) автопарка.")
