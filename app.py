@@ -400,7 +400,7 @@ with chart_col2:
         values="Общая чистая прибыль (₽)", 
         names="Продукт",
         hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Muted
+        color_discrete_sequence=px.colors.qualitative.Safe
     )
     
     fig_pie.update_layout(
