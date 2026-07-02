@@ -434,7 +434,7 @@ st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
 st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
 
-# Формирование структуры данных
+# Формирование структуры данных (столбец "Месяц" убран для чистоты интерфейса)
 payback_rows = []
 for m in months:
     cum_costs = total_capex + (total_opex_monthly * m)
@@ -442,7 +442,6 @@ for m in months:
     net_effect = cum_savings - cum_costs
     
     payback_rows.append({
-        "Месяц": m,
         f"Затраты накопленные ({curr_symbol})": cum_costs,
         f"Экономия ({curr_symbol})": cum_savings,
         f"Эффект ({curr_symbol})": net_effect
@@ -461,9 +460,8 @@ fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
 # Находим максимальное абсолютное значение для идеального центрирования оси "0"
 max_abs_effect = df_payback[col_effect].abs().max()
 
-# Создание кастомного стайлинга через Pandas
+# Создание кастомного стайлинга через Pandas (только для финансовых метрик)
 styled_payback = df_payback.style.format({
-    "Месяц": "{:d}",
     col_costs: fmt_style,
     col_savings: fmt_style,
     col_effect: fmt_style
@@ -472,29 +470,34 @@ styled_payback = df_payback.style.format({
     align='mid',
     vmin=-max_abs_effect,  # Гарантирует, что 0 будет ровно посередине ячейки
     vmax=max_abs_effect,
-    color=['#FF4B4B', '#00CC96']  # Красный для минуса, Зеленый для плюса
+    color=['#FF4B4B', '#00CC96']  # Красный для убытка/затрат, Зеленый для чистой прибыли
 )
 
-# Стилизуем саму HTML-таблицу под строгий B2B интерфейс
+# Стилизация таблицы: растягиваем на 100% ширины широкого экрана
 custom_css = """
 <style>
+    .table-container {
+        width: 100% !important;
+        overflow-x: auto;
+    }
     .styled-table {
-        width: 100%;
+        width: 100% !important;
         border-collapse: collapse;
         font-family: sans-serif;
         font-size: 14px;
         margin: 10px 0;
+        table-layout: fixed; /* Равномерно распределяет доступную ширину между колонками */
     }
     .styled-table th {
         background-color: #f0f2f6;
         color: #31333F;
         text-align: left;
-        padding: 10px 12px;
+        padding: 12px 16px;
         border: 1px solid #dddddd;
         font-weight: 600;
     }
     .styled-table td {
-        padding: 8px 12px;
+        padding: 10px 16px;
         border: 1px solid #dddddd;
         text-align: left;
     }
@@ -504,8 +507,9 @@ custom_css = """
 </style>
 """
 
-# Превращаем DataFrame со стилями баров в HTML и навешиваем наш класс
+# Генерируем HTML без вывода индекса строк (index=False)
 html_table = styled_payback.to_html(classes="styled-table", index=False)
 
-# Выводим в интерфейс
-st.markdown(custom_css + html_table, unsafe_allow_html=True)
+# Собираем финальный блок и рендерим на всю ширину страницы
+full_html = f"{custom_css}<div class='table-container'>{html_table}</div>"
+st.markdown(full_html, unsafe_allow_html=True)
