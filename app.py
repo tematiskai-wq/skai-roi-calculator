@@ -430,6 +430,7 @@ st.markdown("---")
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ (КАК НА СКРИНШОТЕ)
 # ==========================================
+st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
 st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
 
@@ -457,16 +458,54 @@ col_effect = f"Эффект ({curr_symbol})"
 # Функция форматирования с красивыми пробелами-разделителями тысяч
 fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
 
-# Создание кастомного стайлинга через Pandas: двухцветные Data Bars для колонки "Эффект"
+# Находим максимальное абсолютное значение для идеального центрирования оси "0"
+max_abs_effect = df_payback[col_effect].abs().max()
+
+# Создание кастомного стайлинга через Pandas
 styled_payback = df_payback.style.format({
+    "Месяц": "{:d}",
     col_costs: fmt_style,
     col_savings: fmt_style,
     col_effect: fmt_style
 }).bar(
     subset=[col_effect],
     align='mid',
-    color=['#FF4B4B', '#00CC96']  # #FF4B4B - красный (минус), #00CC96 - зеленый (плюс)
+    vmin=-max_abs_effect,  # Гарантирует, что 0 будет ровно посередине ячейки
+    vmax=max_abs_effect,
+    color=['#FF4B4B', '#00CC96']  # Красный для минуса, Зеленый для плюса
 )
 
-# Вывод таблицы на всю ширину страницы без индекса
-st.dataframe(styled_payback, use_container_width=True, hide_index=True)
+# Стилизуем саму HTML-таблицу под строгий B2B интерфейс
+custom_css = """
+<style>
+    .styled-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 14px;
+        margin: 10px 0;
+    }
+    .styled-table th {
+        background-color: #f0f2f6;
+        color: #31333F;
+        text-align: left;
+        padding: 10px 12px;
+        border: 1px solid #dddddd;
+        font-weight: 600;
+    }
+    .styled-table td {
+        padding: 8px 12px;
+        border: 1px solid #dddddd;
+        text-align: left;
+    }
+    .styled-table tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+</style>
+"""
+
+# Превращаем DataFrame со стилями баров в HTML и навешиваем наш класс
+html_table = styled_payback.to_html(classes="styled-table", index=False)
+
+# Выводим в интерфейс
+st.markdown(custom_css + html_table, unsafe_allow_html=True)
