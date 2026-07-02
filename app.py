@@ -7,7 +7,7 @@ import plotly.express as px
 st.set_page_config(page_title="Платформа SKAI: Расширенный калькулятор TCO и ROI", layout="wide")
 
 # ==========================================
-# 1. БАЗА ДАННЫХ И ДЕФОЛТНЫЕ НАСТРОЙКИ ТС
+# 1. БАЗА ДАННЫХ ПРЕСЕТОВ (БАЗОВЫЕ ЗНАЧЕНИЯ В РУБЛЯХ)
 # ==========================================
 presets = {
     "Магистральный тягач (Фура)": {
@@ -36,26 +36,73 @@ presets = {
     }
 }
 
+# Сбор списка всех финансовых ключей для умной конвертации валют
+monetary_keys = [
+    "fuel_price", "emp_salary", "emp_revenue", "disp_salary", 
+    "manager_hourly_rate", "lease_return_cost", "fine_avg_cost", "s_cap", "s_op",
+    "b_cap", "b_op", "v_cap", "v_op", "sd_cap", "sd_op", "f_cap", "f_op"
+]
+for name in presets.keys():
+    monetary_keys.extend([f"maint_{name}", f"acost_{name}"])
+
+# ==========================================
+# 2. ИНИЦИАЛИЗАЦИЯ И КОНВЕРТАЦИЯ СОСТОЯНИЯ (SESSION STATE)
+# ==========================================
+if "initialized" not in st.session_state:
+    st.session_state["initialized"] = True
+    st.session_state["prev_currency"] = "₽ (RUB)"
+    st.session_state["fuel_price"] = 65.0
+    st.session_state["emp_salary"] = 100000
+    st.session_state["emp_revenue"] = 1200000
+    st.session_state["disp_salary"] = 80000
+    st.session_state["manager_hourly_rate"] = 500
+    st.session_state["lease_return_cost"] = 50000
+    st.session_state["fine_avg_cost"] = 500
+    st.session_state["s_cap"] = 40000
+    st.session_state["s_op"] = 900
+    
+    for name, p_default in presets.items():
+        st.session_state[f"maint_{name}"] = p_default["maintenance"]
+        st.session_state[f"acost_{name}"] = p_default["accident_cost"]
+        
+    st.session_state["b_cap"] = 15000
+    st.session_state["b_op"] = 400
+    st.session_state["v_cap"] = 120000
+    st.session_state["v_op"] = 2000
+    st.session_state["sd_cap"] = 10000
+    st.session_state["sd_op"] = 500
+    st.session_state["f_cap"] = 25000
+    st.session_state["f_op"] = 600
+
 def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
 
 # ==========================================
-# 2. СЕКЦИЯ САЙДБАРА: НАСТРОЙКИ И ВАЛЮТА
+# 3. СЕКЦИЯ САЙДБАРА: ВЫБОР ВАЛЮТЫ И СТРУКТУРЫ ПАРКА
 # ==========================================
 st.sidebar.header("Параметры и конфигурация")
 
-# Угловой переключатель валют
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
 is_kzt = "KZT" in currency_choice
 curr_symbol = "₸" if is_kzt else "₽"
-curr_rate = 6.13 if is_kzt else 1.0  # Актуальный курс пересчета
+
+# Пересчет значений ВНУТРИ сессии ТОЛЬКО при физическом переключении радио-кнопки
+if currency_choice != st.session_state["prev_currency"]:
+    factor = 6.13 if is_kzt else (1 / 6.13)
+    for k in monetary_keys:
+        if k in st.session_state:
+            if k == "fuel_price":
+                st.session_state[k] = round(st.session_state[k] * factor, 1)
+            else:
+                st.session_state[k] = round(st.session_state[k] * factor)
+    st.session_state["prev_currency"] = currency_choice
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Состав и параметры ТС")
 
-default_fuel_price = 65.0 if not is_kzt else 398.0
-fuel_price = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(default_fuel_price), step=1.0)
-st.sidebar.markdown("---")
+# Ввод цены топлива на базе сохраненного значения
+st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
+fuel_price = st.session_state["fuel_price"]
 
 fleet_quantities = {}
 custom_fleet_params = {}
@@ -77,80 +124,74 @@ for name, p_default in presets.items():
         with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
-            maintenance = st.number_input(f"ТО + расходники 1 ТС в год ({curr_symbol})", min_value=0, value=int(p_default["maintenance"] * curr_rate), step=5000, key=f"maint_{name}")
+            
+            # Чтение и перезапись финансовых параметров конкретной группы ТС
+            st.session_state[f"maint_{name}"] = st.number_input(f"ТО + расходники 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000)
             accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, value=float(default_accidents), step=0.5, key=f"acc_{name}")
-            acc_cost = st.number_input(f"Прямой ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(p_default["accident_cost"] * curr_rate), step=50000, key=f"acost_{name}")
+            st.session_state[f"acost_{name}"] = st.number_input(f"Прямой ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=50000)
         
         custom_fleet_params[name] = {
-            "qty": qty, "mileage": mileage, "consumption": consumption, "maintenance": maintenance,
-            "accidents_year": accidents, "accident_cost": acc_cost,
-            **{k: v for k, v in p_default.items() if "capex" in k or "opex" in k or "eff" in k}
+            "qty": qty, "mileage": mileage, "consumption": consumption, 
+            "maintenance": st.session_state[f"maint_{name}"],
+            "accidents_year": accidents, "accident_cost": st.session_state[f"acost_{name}"],
+            **{k: v for k, v in p_default.items() if "eff" in k}
         }
         st.sidebar.markdown("---")
 
 total_fleet_size = sum(fleet_quantities.values())
-
 if total_fleet_size == 0:
     st.sidebar.warning("Укажите количество хотя бы для одного типа ТС.")
     st.stop()
 
 # ==========================================
-# 3. СЕКЦИЯ САЙДБАРА: TCO, ПЕРСОНАЛ И СТРУКТУРА ПАРКА
+# 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO И ПЕРСОНАЛОМ
 # ==========================================
 st.sidebar.subheader("Управление TCO, персоналом и лизингом")
 
 with st.sidebar.expander("Потери бэк-офиса, простои и лизинг", expanded=True):
-    st.caption("Параметры для расчета скрытых издержек компании (модель оптимизации TCO)")
-    emp_salary = st.number_input(f"Затраты на 1 сотрудника/водителя в месяц (ФОТ, {curr_symbol})", value=int(100000 * curr_rate), step=5000)
-    emp_revenue = st.number_input(f"Месячный доход/выработка от 1 сотрудника на ТС ({curr_symbol})", value=int(1200000 * curr_rate), step=50000)
+    st.session_state["emp_salary"] = st.number_input(f"Затраты на 1 водителя в месяц (ФОТ, {curr_symbol})", value=int(st.session_state["emp_salary"]), step=5000)
+    st.session_state["emp_revenue"] = st.number_input(f"Месячный доход от 1 сотрудника на ТС ({curr_symbol})", value=int(st.session_state["emp_revenue"]), step=50000)
     
     st.markdown("**Диспетчеризация и администрирование**")
-    disp_salary = st.number_input(f"ФОТ 1 диспетчера/оператора парка в месяц ({curr_symbol})", value=int(80000 * curr_rate), step=5000)
+    st.session_state["disp_salary"] = st.number_input(f"ФОТ 1 диспетчера парка в месяц ({curr_symbol})", value=int(st.session_state["disp_salary"]), step=5000)
     calculated_disp_qty = max(1.0, round(total_fleet_size / 25, 1))
     disp_qty = st.number_input("Текущее кол-во диспетчеров в штате (база)", value=float(calculated_disp_qty), step=0.5)
     
     st.markdown("**Издержки при инцидентах**")
     downtime_days = st.number_input("Средний простой ТС после ДТП (дней)", value=14, step=1)
-    manager_hourly_rate = st.number_input(f"Стоимость 1 часа работы бэк-офиса ({curr_symbol})", value=int(500 * curr_rate), step=50)
+    st.session_state["manager_hourly_rate"] = st.number_input(f"Стоимость 1 часа работы бэк-офиса ({curr_symbol})", value=int(st.session_state["manager_hourly_rate"]), step=50)
     time_manager_accident = st.number_input("Время менеджера на 1 ДТП (часов)", value=8, step=1)
     
     st.markdown("**Условия владения и штрафы**")
     lease_share = st.slider("Доля лизинговых ТС в парке (%)", min_value=0, max_value=100, value=60, step=5)
-    st.caption(f"Собственных ТС в парке: {100 - lease_share}% ({round(total_fleet_size * (1 - lease_share/100))} шт.)")
     
     if lease_share > 0:
         lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
-        lease_return_cost = st.number_input(f"Выплаты лизинговой при возврате (на 1 ТС, {curr_symbol})", value=int(50000 * curr_rate), step=5000)
+        st.session_state["lease_return_cost"] = st.number_input(f"Выплаты лизинговой при возврате (на 1 ТС, {curr_symbol})", value=int(st.session_state["lease_return_cost"]), step=5000)
     else:
-        lease_term = 48
-        lease_return_cost = 0
+        lease_term, st.session_state["lease_return_cost"] = 48, 0
 
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
-    fine_avg_cost = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(500 * curr_rate), step=100)
+    st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = st.number_input("Время на обработку 1 штрафа (часов)", value=0.5, step=0.1)
 
-st.sidebar.markdown("---")
-
-# Расчет производных параметров TCO
+# Математические константы на базе session_state
 working_days_month = 21.7
-employee_daily_cost = emp_salary / working_days_month
-employee_daily_revenue = emp_revenue / working_days_month
+employee_daily_cost = st.session_state["emp_salary"] / working_days_month
+employee_daily_revenue = st.session_state["emp_revenue"] / working_days_month
 
 def get_total_accident_cost(direct_cost):
     downtime_loss = downtime_days * (employee_daily_cost + employee_daily_revenue)
-    management_loss = time_manager_accident * manager_hourly_rate
+    management_loss = time_manager_accident * st.session_state["manager_hourly_rate"]
     return direct_cost + downtime_loss + management_loss
 
-fine_loss_per_car_month = (fines_per_car_year * (fine_avg_cost + (time_manager_fine * manager_hourly_rate))) / 12
-lease_risk_per_car_month = lease_return_cost / lease_term if lease_term > 0 else 0
-total_disp_fot_before = disp_qty * disp_salary
+fine_loss_per_car_month = (fines_per_car_year * (st.session_state["fine_avg_cost"] + (time_manager_fine * st.session_state["manager_hourly_rate"]))) / 12
+lease_risk_per_car_month = st.session_state["lease_return_cost"] / lease_term if lease_term > 0 else 0
+total_disp_fot_before = disp_qty * st.session_state["disp_salary"]
 
-# Базовые финансовые показатели ДО внедрения
-total_fuel_before = 0
-total_maint_before = 0
-total_accidents_year = 0
-total_direct_accident_damage_before = 0
-total_tco_accident_damage_before = 0
+# Базовый расчет расходов ДО внедрения системы
+total_fuel_before, total_maint_before, total_accidents_year = 0, 0, 0
+total_direct_accident_damage_before, total_tco_accident_damage_before = 0, 0
 
 for name, cp in custom_fleet_params.items():
     q = cp["qty"]
@@ -161,63 +202,36 @@ for name, cp in custom_fleet_params.items():
     total_tco_accident_damage_before += cp["accidents_year"] * get_total_accident_cost(cp["accident_cost"])
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
-leased_fleet_count = total_fleet_size * (lease_share / 100)
-total_lease_risk_before = lease_risk_per_car_month * leased_fleet_count
+total_lease_risk_before = lease_risk_per_car_month * total_fleet_size * (lease_share / 100)
 
 # ==========================================
-# 4. СЕКЦИЯ САЙДБАРА: МОДУЛИ SKAI
+# 5. СЕКЦИЯ САЙДБАРА: НАСТРОЙКИ МОДУЛЕЙ SKAI
 # ==========================================
 st.sidebar.subheader("Модули платформы SKAI")
-available_modules = [
-    "Видеоаналитика", "Базовый Мониторинг", "Безопасное вождение", 
-    "Контроль топлива", "Сервис аналитики и реагирования"
-]
-selected_modules = []
-
-for module_name in available_modules:
-    default_checked = True if module_name in ["Видеоаналитика", "Базовый Мониторинг"] else False
-    if st.sidebar.checkbox(module_name, value=default_checked):
-        selected_modules.append(module_name)
+available_modules = ["Видеоаналитика", "Базовый Мониторинг", "Безопасное вождение", "Контроль топлива", "Сервис аналитики и реагирования"]
+selected_modules = [m for m in available_modules if st.sidebar.checkbox(m, value=(m in ["Видеоаналитика", "Базовый Мониторинг"]))]
 
 if not selected_modules:
     st.sidebar.warning("Выберите хотя бы один модуль.")
     st.stop()
 
-def get_weighted_value(field):
-    vals = [cp[field] * cp["qty"] for cp in custom_fleet_params.values() if field in cp]
-    return sum(vals) / total_fleet_size if vals else 0
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Тонкие настройки эффектов модулей")
-
 modules_payload = {}
 savings_by_cat = {"fuel": 0, "maint": 0, "acc_direct": 0, "acc_tco": 0, "fines": 0, "lease": 0, "disp": 0}
 
-# --- МОДУЛЬ: БАЗОВЫЙ МОНИТОРИНГ ---
+# --- БАЗОВЫЙ МОНИТОРИНГ ---
 if "Базовый Мониторинг" in selected_modules:
-    with st.sidebar.expander("Модуль: Базовый Мониторинг", expanded=True):
-        b_capex = st.number_input(f"Стоимость трекера на 1 ТС ({curr_symbol})", value=int(get_weighted_value("base_capex") * curr_rate), step=1000, key="b_cap")
-        b_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("base_opex") * curr_rate), step=50, key="b_op")
-        
-        st.markdown("**Целевые эффекты базового контроля:**")
-        eff_fuel = st.slider("Сокращение пробега и расхода ГСМ (%)", 0.0, 25.0, float(get_weighted_value("base_eff_fuel")), step=0.5) / 100
-        eff_to = st.slider("Сокращение избыточного износа и ТО (%)", 0.0, 25.0, float(get_weighted_value("base_eff_to")), step=0.5) / 100
-        eff_fines = st.slider("Сокращение числа штрафов (%)", 0, 100, int(get_weighted_value("base_eff_fines")), step=5) / 100
-        
-        if lease_share > 0:
-            eff_lease = st.slider("Снижение выплат лизинговой (сохранение ТС) (%)", 0, 100, int(get_weighted_value("base_eff_lease")), step=5) / 100
-        else:
-            eff_lease = 0.0
+    with st.sidebar.expander("Модуль: Базовый Мониторинг", expanded=False):
+        st.session_state["b_cap"] = st.number_input(f"Трекер на 1 ТС ({curr_symbol})", value=int(st.session_state["b_cap"]), step=1000)
+        st.session_state["b_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["b_op"]), step=50)
+        eff_fuel = st.slider("Сокращение пробега и ГСМ (%)", 0.0, 25.0, 8.0, step=0.5) / 100
+        eff_to = st.slider("Сокращение износа и ТО (%)", 0.0, 25.0, 10.0, step=0.5) / 100
+        eff_fines = st.slider("Сокращение штрафов (%)", 0, 100, 40, step=5) / 100
+        eff_lease = st.slider("Снижение выплат лизинговой (%)", 0, 100, 20, step=5) / 100 if lease_share > 0 else 0.0
+        eff_acc = st.slider("Сокращение ДТП (геозоны) (%)", 0, 100, 15, step=5) / 100
 
-        eff_acc = st.slider("Сокращение ДТП (контроль геозон) (%)", 0, 100, int(get_weighted_value("base_eff_acc")), step=5) / 100
-
-        b_direct_saving = (total_fuel_before * eff_fuel) + (total_maint_before * eff_to) + ((total_direct_accident_damage_before / 12) * eff_acc)
-        b_tco_saving = (total_fines_loss_before * eff_fines) + (total_lease_risk_before * eff_lease) + (((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc)
-        
-        modules_payload["Базовый Мониторинг"] = {
-            "capex": b_capex * total_fleet_size, "opex": b_opex * total_fleet_size,
-            "direct": b_direct_saving, "tco": b_tco_saving
-        }
+        b_dir = (total_fuel_before * eff_fuel) + (total_maint_before * eff_to) + ((total_direct_accident_damage_before / 12) * eff_acc)
+        b_tco = (total_fines_loss_before * eff_fines) + (total_lease_risk_before * eff_lease) + (((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc)
+        modules_payload["Базовый Мониторинг"] = {"capex": st.session_state["b_cap"] * total_fleet_size, "opex": st.session_state["b_op"] * total_fleet_size, "direct": b_dir, "tco": b_tco}
         savings_by_cat["fuel"] += total_fuel_before * eff_fuel
         savings_by_cat["maint"] += total_maint_before * eff_to
         savings_by_cat["acc_direct"] += (total_direct_accident_damage_before / 12) * eff_acc
@@ -225,101 +239,71 @@ if "Базовый Мониторинг" in selected_modules:
         savings_by_cat["lease"] += total_lease_risk_before * eff_lease
         savings_by_cat["acc_tco"] += ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc
 
-# --- МОДУЛЬ: СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
+# --- СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
 if "Сервис аналитики и реагирования" in selected_modules:
-    with st.sidebar.expander("Сервис аналитики и реагирования", expanded=True):
-        s_capex = st.number_input(f"Единовременные затраты ({curr_symbol})", value=int(40000 * curr_rate), step=10000, key="s_cap")
-        s_opex = st.number_input(f"АП на 1 ТС/мес (ситуационный центр) ({curr_symbol})", value=int(900 * curr_rate), step=100, key="s_op")
+    with st.sidebar.expander("Сервис аналитики и реагирования", expanded=False):
+        st.session_state["s_cap"] = st.number_input(f"Единовременные затраты ({curr_symbol})", value=int(st.session_state["s_cap"]), step=10000)
+        st.session_state["s_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["s_op"]), step=100)
         s_eff_disp = st.slider("Сокращение затрат на ФОТ диспетчеров (%)", 0, 100, 60, step=5) / 100
         
-        s_tco_saving = total_disp_fot_before * s_eff_disp
-        
-        modules_payload["Сервис аналитики и реагирования"] = {
-            "capex": s_capex, "opex": s_opex * total_fleet_size,
-            "direct": 0, "tco": s_tco_saving
-        }
-        savings_by_cat["disp"] += s_tco_saving
+        modules_payload["Сервис аналитики и реагирования"] = {"capex": st.session_state["s_cap"], "opex": st.session_state["s_op"] * total_fleet_size, "direct": 0, "tco": total_disp_fot_before * s_eff_disp}
+        savings_by_cat["disp"] += total_disp_fot_before * s_eff_disp
 
-# --- МОДУЛЬ: ВИДЕОАНАЛИТИКА ---
+# --- ВИДЕОАНАЛИТИКА ---
 if "Видеоаналитика" in selected_modules:
-    with st.sidebar.expander("Модуль: Видеоаналитика", expanded=True):
-        v_capex = st.number_input(f"Стоимость оборудования на 1 ТС ({curr_symbol})", value=int(get_weighted_value("video_capex") * curr_rate), step=5000, key="v_cap")
-        v_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("video_opex") * curr_rate), step=100, key="v_op")
+    with st.sidebar.expander("Модуль: Видеоаналитика", expanded=False):
+        st.session_state["v_cap"] = st.number_input(f"Оборудование на 1 ТС ({curr_symbol})", value=int(st.session_state["v_cap"]), step=5000)
+        st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
+        v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 55, step=5) / 100
         
-        v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, int(get_weighted_value("video_eff")), step=5) / 100
-        
-        v_direct_damage_monthly = total_direct_accident_damage_before / 12
-        v_tco_damage_monthly = total_tco_accident_damage_before / 12
-        
-        v_direct_saving = v_direct_damage_monthly * v_eff
-        v_tco_saving = (v_tco_damage_monthly - v_direct_damage_monthly) * v_eff
-        
-        modules_payload["Видеоаналитика"] = {
-            "capex": v_capex * total_fleet_size, "opex": v_opex * total_fleet_size,
-            "direct": v_direct_saving, "tco": v_tco_saving
-        }
-        savings_by_cat["acc_direct"] += v_direct_saving
-        savings_by_cat["acc_tco"] += v_tco_saving
+        v_dir = (total_direct_accident_damage_before / 12) * v_eff
+        v_tco = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * v_eff
+        modules_payload["Видеоаналитика"] = {"capex": st.session_state["v_cap"] * total_fleet_size, "opex": st.session_state["v_op"] * total_fleet_size, "direct": v_dir, "tco": v_tco}
+        savings_by_cat["acc_direct"] += v_dir
+        savings_by_cat["acc_tco"] += v_tco
 
-# --- МОДУЛЬ: БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
+# --- БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
 if "Безопасное вождение" in selected_modules:
-    with st.sidebar.expander("Модуль: Безопасное вождение", expanded=True):
-        sd_capex = st.number_input(f"Стоимость модуля на 1 ТС ({curr_symbol})", value=int(get_weighted_value("safe_capex") * curr_rate), step=1000, key="sd_cap")
-        sd_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("safe_opex") * curr_rate), step=50, key="sd_op")
-        sd_eff_to = st.slider("Доп. экономия на ТО от бережной езды (%)", 0, 40, int(get_weighted_value("safe_eff_to")), step=5) / 100
-        sd_eff_acc = st.slider("Доп. снижение ДТП от скоринга (%)", 0, 40, int(get_weighted_value("safe_eff_acc")), step=5) / 100
+    with st.sidebar.expander("Модуль: Безопасное вождение", expanded=False):
+        st.session_state["sd_cap"] = st.number_input(f"Стоимость модуля на 1 ТС ({curr_symbol})", value=int(st.session_state["sd_cap"]), step=1000)
+        st.session_state["sd_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["sd_op"]), step=50)
+        sd_eff_to = st.slider("Доп. экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
+        sd_eff_acc = st.slider("Доп. снижение ДТП от скоринга (%)", 0, 40, 15, step=5) / 100
         
-        sd_direct_saving = (total_maint_before * sd_eff_to) + ((total_direct_accident_damage_before / 12) * sd_eff_acc)
-        sd_tco_saving = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * sd_eff_acc
-        
-        modules_payload["Безопасное вождение"] = {
-            "capex": sd_capex * total_fleet_size, "opex": sd_opex * total_fleet_size,
-            "direct": sd_direct_saving, "tco": sd_tco_saving
-        }
+        sd_dir = (total_maint_before * sd_eff_to) + ((total_direct_accident_damage_before / 12) * sd_eff_acc)
+        sd_tco = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * sd_eff_acc
+        modules_payload["Безопасное вождение"] = {"capex": st.session_state["sd_cap"] * total_fleet_size, "opex": st.session_state["sd_op"] * total_fleet_size, "direct": sd_dir, "tco": sd_tco}
         savings_by_cat["maint"] += total_maint_before * sd_eff_to
         savings_by_cat["acc_direct"] += (total_direct_accident_damage_before / 12) * sd_eff_acc
-        savings_by_cat["acc_tco"] += sd_tco_saving
+        savings_by_cat["acc_tco"] += sd_tco
 
-# --- МОДУЛЬ: КОНТРОЛЬ ТОПЛИВА ---
+# --- КОНТРОЛЬ ТОПЛИВА ---
 if "Контроль топлива" in selected_modules:
-    with st.sidebar.expander("Модуль: Контроль топлива", expanded=True):
-        f_capex = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(get_weighted_value("fuel_capex") * curr_rate), step=2000, key="f_cap")
-        f_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("fuel_opex") * curr_rate), step=50, key="f_op")
-        f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, float(get_weighted_value("fuel_eff")), step=0.5) / 100
+    with st.sidebar.expander("Модуль: Контроль топлива", expanded=False):
+        st.session_state["f_cap"] = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(st.session_state["f_cap"]), step=2000)
+        st.session_state["f_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["f_op"]), step=50)
+        f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, 10.0, step=0.5) / 100
         
-        f_direct_saving = total_fuel_before * f_eff
-        
-        modules_payload["Контроль топлива"] = {
-            "capex": f_capex * total_fleet_size, "opex": f_opex * total_fleet_size,
-            "direct": f_direct_saving, "tco": 0
-        }
-        savings_by_cat["fuel"] += f_direct_saving
+        modules_payload["Контроль топлива"] = {"capex": st.session_state["f_cap"] * total_fleet_size, "opex": st.session_state["f_op"] * total_fleet_size, "direct": total_fuel_before * f_eff, "tco": 0}
+        savings_by_cat["fuel"] += total_fuel_before * f_eff
 
 # ==========================================
-# 5. ОСНОВНАЯ ЧАСТЬ СТРАНИЦЫ (ИНТЕРФЕЙС)
+# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК
 # ==========================================
 st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
 
-fleet_structure_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
-st.markdown(f"Структура парка: {fleet_structure_str} | Всего: **{total_fleet_size} ТС** (Лизинг: {lease_share}% / Собственные: {100 - lease_share}%)")
+fleet_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
+st.markdown(f"Структура парка: {fleet_str} | Всего: **{total_fleet_size} ТС**")
 st.markdown("---")
 
-calc_mode = st.radio(
-    "Аналитическая модель расчета:",
-    ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь, лизинга и оптимизации ФОТ)"],
-    horizontal=True
-)
-
+calc_mode = st.radio("Аналитическая модель расчета:", ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь, лизинга и оптимизации ФОТ)"], horizontal=True)
 is_tco = "Полный TCO" in calc_mode
 mode_title = "полного TCO расчета" if is_tco else "прямого эффекта"
 
 total_capex = sum(m["capex"] for m in modules_payload.values())
 total_opex_monthly = sum(m["opex"] for m in modules_payload.values())
 
-total_monthly_saving = 0
-for m in modules_payload.values():
-    total_monthly_saving += m["direct"] + (m["tco"] if is_tco else 0)
-
+total_monthly_saving = sum(m["direct"] + (m["tco"] if is_tco else 0) for m in modules_payload.values())
 net_monthly_benefit = total_monthly_saving - total_opex_monthly
 payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 else float('inf')
 
@@ -331,8 +315,7 @@ m3.metric("Срок окупаемости инвестиций", f"{payback_per
 
 st.markdown("---")
 
-st.subheader(f"Детализация влияния факторов на издержки автопарка (в месяц)")
-
+# Таблица детализации
 tco_table_data = [
     ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
     ["Затраты на ТО и расходники", fmt(total_maint_before), fmt(savings_by_cat["maint"]), "Прямой эффект"],
@@ -341,25 +324,16 @@ tco_table_data = [
     ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
     ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"]
 ]
-
 if lease_share > 0:
-    tco_table_data.append([
-        f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", 
-        fmt(total_lease_risk_before), 
-        fmt(savings_by_cat["lease"] if is_tco else 0), 
-        "Косвенный (TCO)"
-    ])
+    tco_table_data.append([f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", fmt(total_lease_risk_before), fmt(savings_by_cat["lease"] if is_tco else 0), "Косвенный (TCO)"])
 
 df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", f"Базовые затраты до внедрения ({curr_symbol}/мес)", f"Прогноз экономии от SKAI ({curr_symbol}/мес)", "Тип фактора"])
 st.dataframe(df_tco, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
-# ==========================================
-# 6. СОВМЕЩЕННАЯ ВИЗУАЛИЗАЦИЯ И КРУГОВАЯ ДИАГРАММА ДОЛЕЙ
-# ==========================================
+# Графики верхнего уровня
 st.subheader(f"Анализ влияния продуктов на снижение издержек ({mode_title})")
-
 months = np.arange(1, 37)
 area_chart_data = []
 total_savings_by_module = {m_name: 0.0 for m_name in modules_payload.keys()}
@@ -368,64 +342,21 @@ for m in months:
     row = {"Месяц": m}
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-        m_net_monthly = m_saving - metrics["opex"]
-        accumulated_value = m_net_monthly * m
+        accumulated_value = (m_saving - metrics["opex"]) * m
         row[module_name] = max(0.0, accumulated_value)
-        
         if m == 36:
             total_savings_by_module[module_name] = max(0.0, accumulated_value)
-            
     area_chart_data.append(row)
 
-df_area = pd.DataFrame(area_chart_data)
-
 chart_col1, chart_col2 = st.columns([2, 1])
-
 with chart_col1:
-    st.markdown(f"**Динамика накопления сэкономленных средств по месяцам ({curr_symbol})**")
-    
-    fig_area = px.area(
-        df_area,
-        x="Месяц",
-        y=list(modules_payload.keys()),
-        color_discrete_sequence=px.colors.qualitative.Safe
-    )
-    
-    fig_area.update_layout(
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis_title="Месяц эксплуатации системы",
-        yaxis_title=f"Совокупная экономия ({curr_symbol})",
-        hovermode="x unified",
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
-    )
-    
+    fig_area = px.area(pd.DataFrame(area_chart_data), x="Месяц", y=list(modules_payload.keys()), color_discrete_sequence=px.colors.qualitative.Safe)
+    fig_area.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title="Месяц", yaxis_title=f"Экономия ({curr_symbol})", hovermode="x unified")
     st.plotly_chart(fig_area, use_container_width=True)
-
 with chart_col2:
-    st.markdown("**Структура совокупной экономии за 36 месяцев**")
-    
-    df_pie = pd.DataFrame([
-        {"Продукт": k, f"Совокупная экономия ({curr_symbol})": v} for k, v in total_savings_by_module.items()
-    ])
-    
-    fig_pie = px.pie(
-        df_pie, 
-        values=f"Совокупная экономия ({curr_symbol})", 
-        names="Продукт",
-        hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Safe
-    )
-    
-    fig_pie.update_layout(
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
-    )
-    
+    fig_pie = px.pie(pd.DataFrame([{"Продукт": k, "Экономия": v} for k, v in total_savings_by_module.items()]), values="Экономия", names="Продукт", hole=0.4, color_discrete_sequence=px.colors.qualitative.Safe)
+    fig_pie.update_layout(margin=dict(l=10, r=10, t=10, b=10))
     st.plotly_chart(fig_pie, use_container_width=True)
-
-st.markdown("---")
 
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ (КАК НА СКРИНШОТЕ)
@@ -434,13 +365,11 @@ st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
 st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
 
-# Названия колонок для применения стилей
 col_month = "Месяц"
 col_costs = f"Затраты накопленные ({curr_symbol})"
 col_savings = f"Экономия ({curr_symbol})"
 col_effect = f"Эффект ({curr_symbol})"
 
-# Формирование структуры данных — МЕСЯЦ ВЕРНУЛСЯ НА БАЗУ
 payback_rows = []
 for m in months:
     cum_costs = total_capex + (total_opex_monthly * m)
@@ -456,13 +385,10 @@ for m in months:
 
 df_payback = pd.DataFrame(payback_rows)
 
-# Функция форматирования с красивыми пробелами-разделителями тысяч
 fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
-
-# Находим максимальное абсолютное значение для идеального центрирования оси "0"
 max_abs_effect = df_payback[col_effect].abs().max()
 
-# Создание кастомного стайлинга через Pandas
+# Форматирование, создание Data Bars И жесткое скрытие системных строк Pandas через .hide()
 styled_payback = df_payback.style.format({
     col_month: "{:d}",
     col_costs: fmt_style,
@@ -471,66 +397,41 @@ styled_payback = df_payback.style.format({
 }).bar(
     subset=[col_effect],
     align='mid',
-    vmin=-max_abs_effect,  # Гарантирует, что 0 будет ровно посередине ячейки
+    vmin=-max_abs_effect,
     vmax=max_abs_effect,
-    color=['#FF4B4B', '#00CC96']  # Красный для убытка/затрат, Зеленый для чистой прибыли
-)
+    color=['#FF4B4B', '#00CC96']
+).hide(axis='index')
 
-# Агрессивный CSS для взлома ограничений ширины Streamlit-контейнера
+# Базовый лаконичный CSS (без принудительного растяжения контейнеров на весь экран)
 custom_css = """
 <style>
-    /* Расширяем стандартный контейнер маркдауна Streamlit на всю доступную ширину */
-    div[data-testid="stMarkdownContainer"] > div {
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-    
     .table-container {
-        width: 100% !important;
-        max-width: 100% !important;
         overflow-x: auto;
         margin: 15px 0;
     }
-    
     .styled-table {
-        width: 100% !important;
-        max-width: 100% !important;
         border-collapse: collapse;
         font-family: sans-serif;
         font-size: 14px;
-        table-layout: fixed; /* Жесткое распределение ширины */
     }
-    
-    /* Настройка пропорций колонок: Месяц поуже, остальные делят остаток */
-    .styled-table th:nth-child(1), .styled-table td:nth-child(1) { width: 8%; text-align: center; }
-    .styled-table th:nth-child(2), .styled-table td:nth-child(2) { width: 27%; }
-    .styled-table th:nth-child(3), .styled-table td:nth-child(3) { width: 27%; }
-    .styled-table th:nth-child(4), .styled-table td:nth-child(4) { width: 38%; } /* Больше места под графику эффекта */
-
     .styled-table th {
         background-color: #f0f2f6;
         color: #31333F;
         text-align: left;
-        padding: 12px 16px;
+        padding: 10px 14px;
         border: 1px solid #dddddd;
         font-weight: 600;
     }
-    
     .styled-table td {
-        padding: 10px 16px;
+        padding: 8px 14px;
         border: 1px solid #dddddd;
         text-align: left;
     }
-    
     .styled-table tr:nth-child(even) {
         background-color: #f9f9f9;
     }
 </style>
 """
 
-# Генерируем чистый HTML без внутренних индексов Pandas (index=False)
-html_table = styled_payback.to_html(classes="styled-table", index=False)
-
-# Финальный вывод
-full_html = f"{custom_css}<div class='table-container'>{html_table}</div>"
-st.markdown(full_html, unsafe_allow_html=True)
+html_table = styled_payback.to_html(classes="styled-table")
+st.markdown(f"{custom_css}<div class='table-container'>{html_table}</div>", unsafe_allow_html=True)
