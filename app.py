@@ -104,7 +104,7 @@ if currency_choice != st.session_state["prev_currency"]:
                 st.session_state[k] = round(st.session_state[k] * factor)
     st.session_state["prev_currency"] = currency_choice
 
-# Цена топлива перенесена в блок основной конфигурации
+# Цена топлива в блоке основной конфигурации
 st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
 fuel_price = st.session_state["fuel_price"]
 
@@ -120,7 +120,7 @@ default_qtys = {
     "Легкий коммерческий транспорт / Корпоративные авто": 15
 }
 
-# Компактный вывод ТС без внутренних разделителей линий
+# Компактный вывод ТС без внутренних разделителей линий с иконками
 for name, p_default in presets.items():
     icon = fleet_icons.get(name, "🚗")
     qty = st.sidebar.number_input(f"{icon} {name} (шт):", min_value=0, value=default_qtys[name], step=5)
@@ -318,8 +318,8 @@ payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 el
 
 st.subheader("Экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
-m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} {curr_symbol}")
-m2.metric("Сэкономленный budget / мес (чистый)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
+m1.metric("Капитальные вложения (Стартовые инвестиции)", f"{fmt(total_capex)} {curr_symbol}")
+m2.metric("Чистая экономия в месяц", f"{fmt(net_monthly_benefit)} {curr_symbol}")
 m3.metric("Срок окупаемости инвестиций", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
 
 st.markdown("---")
@@ -372,7 +372,7 @@ with chart_col2:
 # ==========================================
 st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
-st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
+st.markdown("Таблица отражает накопленные затраты (капитальные и операционные) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
 
 col_month = "Месяц"
 col_costs = f"Затраты накопленные ({curr_symbol})"
@@ -408,7 +408,7 @@ styled_payback = df_payback.style.format({
     align='mid',
     vmin=-max_abs_effect,
     vmax=max_abs_effect,
-    color=['#FF4B4B', '#00CC96']
+    color=["#FFA1A1", "#9CEBD6"]
 ).hide(axis='index')
 
 # Дефолтный аккуратный CSS
