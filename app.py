@@ -434,7 +434,13 @@ st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
 st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
 
-# Формирование структуры данных (столбец "Месяц" убран для чистоты интерфейса)
+# Названия колонок для применения стилей
+col_month = "Месяц"
+col_costs = f"Затраты накопленные ({curr_symbol})"
+col_savings = f"Экономия ({curr_symbol})"
+col_effect = f"Эффект ({curr_symbol})"
+
+# Формирование структуры данных — МЕСЯЦ ВЕРНУЛСЯ НА БАЗУ
 payback_rows = []
 for m in months:
     cum_costs = total_capex + (total_opex_monthly * m)
@@ -442,17 +448,13 @@ for m in months:
     net_effect = cum_savings - cum_costs
     
     payback_rows.append({
-        f"Затраты накопленные ({curr_symbol})": cum_costs,
-        f"Экономия ({curr_symbol})": cum_savings,
-        f"Эффект ({curr_symbol})": net_effect
+        col_month: int(m),
+        col_costs: cum_costs,
+        col_savings: cum_savings,
+        col_effect: net_effect
     })
 
 df_payback = pd.DataFrame(payback_rows)
-
-# Названия колонок для применения стилей
-col_costs = f"Затраты накопленные ({curr_symbol})"
-col_savings = f"Экономия ({curr_symbol})"
-col_effect = f"Эффект ({curr_symbol})"
 
 # Функция форматирования с красивыми пробелами-разделителями тысяч
 fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
@@ -460,8 +462,9 @@ fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
 # Находим максимальное абсолютное значение для идеального центрирования оси "0"
 max_abs_effect = df_payback[col_effect].abs().max()
 
-# Создание кастомного стайлинга через Pandas (только для финансовых метрик)
+# Создание кастомного стайлинга через Pandas
 styled_payback = df_payback.style.format({
+    col_month: "{:d}",
     col_costs: fmt_style,
     col_savings: fmt_style,
     col_effect: fmt_style
@@ -473,21 +476,37 @@ styled_payback = df_payback.style.format({
     color=['#FF4B4B', '#00CC96']  # Красный для убытка/затрат, Зеленый для чистой прибыли
 )
 
-# Стилизация таблицы: растягиваем на 100% ширины широкого экрана
+# Агрессивный CSS для взлома ограничений ширины Streamlit-контейнера
 custom_css = """
 <style>
+    /* Расширяем стандартный контейнер маркдауна Streamlit на всю доступную ширину */
+    div[data-testid="stMarkdownContainer"] > div {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
     .table-container {
         width: 100% !important;
+        max-width: 100% !important;
         overflow-x: auto;
+        margin: 15px 0;
     }
+    
     .styled-table {
         width: 100% !important;
+        max-width: 100% !important;
         border-collapse: collapse;
         font-family: sans-serif;
         font-size: 14px;
-        margin: 10px 0;
-        table-layout: fixed; /* Равномерно распределяет доступную ширину между колонками */
+        table-layout: fixed; /* Жесткое распределение ширины */
     }
+    
+    /* Настройка пропорций колонок: Месяц поуже, остальные делят остаток */
+    .styled-table th:nth-child(1), .styled-table td:nth-child(1) { width: 8%; text-align: center; }
+    .styled-table th:nth-child(2), .styled-table td:nth-child(2) { width: 27%; }
+    .styled-table th:nth-child(3), .styled-table td:nth-child(3) { width: 27%; }
+    .styled-table th:nth-child(4), .styled-table td:nth-child(4) { width: 38%; } /* Больше места под графику эффекта */
+
     .styled-table th {
         background-color: #f0f2f6;
         color: #31333F;
@@ -496,20 +515,22 @@ custom_css = """
         border: 1px solid #dddddd;
         font-weight: 600;
     }
+    
     .styled-table td {
         padding: 10px 16px;
         border: 1px solid #dddddd;
         text-align: left;
     }
+    
     .styled-table tr:nth-child(even) {
         background-color: #f9f9f9;
     }
 </style>
 """
 
-# Генерируем HTML без вывода индекса строк (index=False)
+# Генерируем чистый HTML без внутренних индексов Pandas (index=False)
 html_table = styled_payback.to_html(classes="styled-table", index=False)
 
-# Собираем финальный блок и рендерим на всю ширину страницы
+# Финальный вывод
 full_html = f"{custom_css}<div class='table-container'>{html_table}</div>"
 st.markdown(full_html, unsafe_allow_html=True)
