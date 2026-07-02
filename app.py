@@ -326,7 +326,7 @@ payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 el
 st.subheader("Экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
 m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} {curr_symbol}")
-m2.metric("Сэкономленный бюджет / мес (чистый)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
+m2.metric("Сэкономленный budget / мес (чистый)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
 m3.metric("Срок окупаемости инвестиций", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
 
 st.markdown("---")
@@ -424,3 +424,49 @@ with chart_col2:
     )
     
     st.plotly_chart(fig_pie, use_container_width=True)
+
+st.markdown("---")
+
+# ==========================================
+# 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ (КАК НА СКРИНШОТЕ)
+# ==========================================
+st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
+st.markdown("Таблица отражает накопленные затраты (Capex + Opex) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
+
+# Формирование структуры данных
+payback_rows = []
+for m in months:
+    cum_costs = total_capex + (total_opex_monthly * m)
+    cum_savings = total_monthly_saving * m
+    net_effect = cum_savings - cum_costs
+    
+    payback_rows.append({
+        "Месяц": m,
+        f"Затраты накопленные ({curr_symbol})": cum_costs,
+        f"Экономия ({curr_symbol})": cum_savings,
+        f"Эффект ({curr_symbol})": net_effect
+    })
+
+df_payback = pd.DataFrame(payback_rows)
+
+# Названия колонок для применения стилей
+col_costs = f"Затраты накопленные ({curr_symbol})"
+col_savings = f"Экономия ({curr_symbol})"
+col_effect = f"Эффект ({curr_symbol})"
+
+# Функция форматирования с красивыми пробелами-разделителями тысяч
+fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
+
+# Создание кастомного стайлинга через Pandas: двухцветные Data Bars для колонки "Эффект"
+styled_payback = df_payback.style.format({
+    col_costs: fmt_style,
+    col_savings: fmt_style,
+    col_effect: fmt_style
+}).bar(
+    subset=[col_effect],
+    align='mid',
+    color=['#FF4B4B', '#00CC96']  # #FF4B4B - красный (минус), #00CC96 - зеленый (плюс)
+)
+
+# Вывод таблицы на всю ширину страницы без индекса
+st.dataframe(styled_payback, use_container_width=True, hide_index=True)
