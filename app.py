@@ -36,6 +36,13 @@ presets = {
     }
 }
 
+# Иконки для типов транспортных средств
+fleet_icons = {
+    "Магистральный тягач (Фура)": "🚛",
+    "Самосвал / Тяжелая спецтехника": "🏗️",
+    "Легкий коммерческий транспорт / Корпоративные авто": "🚐"
+}
+
 # Сбор списка всех финансовых ключей для умной конвертации валют
 monetary_keys = [
     "fuel_price", "emp_salary", "emp_revenue", "disp_salary", 
@@ -78,7 +85,7 @@ def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
 
 # ==========================================
-# 3. СЕКЦИЯ САЙДБАРА: ВЫБОР ВАЛЮТЫ И СТРУКТУРЫ ПАРКА
+# 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
 st.sidebar.header("Параметры и конфигурация")
 
@@ -97,12 +104,12 @@ if currency_choice != st.session_state["prev_currency"]:
                 st.session_state[k] = round(st.session_state[k] * factor)
     st.session_state["prev_currency"] = currency_choice
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Состав и параметры ТС")
-
-# Ввод цены топлива на базе сохраненного значения
+# Цена топлива перенесена в блок основной конфигурации
 st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
 fuel_price = st.session_state["fuel_price"]
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Состав и параметры ТС")
 
 fleet_quantities = {}
 custom_fleet_params = {}
@@ -113,22 +120,23 @@ default_qtys = {
     "Легкий коммерческий транспорт / Корпоративные авто": 15
 }
 
+# Компактный вывод ТС без внутренних разделителей линий
 for name, p_default in presets.items():
-    qty = st.sidebar.number_input(f"{name} (кол-во, шт):", min_value=0, value=default_qtys[name], step=5)
+    icon = fleet_icons.get(name, "🚗")
+    qty = st.sidebar.number_input(f"{icon} {name} (шт):", min_value=0, value=default_qtys[name], step=5)
     
     if qty > 0:
         fleet_quantities[name] = qty
         default_accidents = p_default["accidents_year"] * (qty / p_default["fleet_size"])
         clean_name = name.split(" (")[0]
         
-        with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
+        with st.sidebar.expander(f"⚙️ Настройки: {clean_name}", expanded=False):
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
             
-            # Чтение и перезапись финансовых параметров конкретной группы ТС
-            st.session_state[f"maint_{name}"] = st.number_input(f"ТО + расходники 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000)
+            st.session_state[f"maint_{name}"] = st.number_input(f"ТО + расходники 1 ТС/год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000)
             accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, value=float(default_accidents), step=0.5, key=f"acc_{name}")
-            st.session_state[f"acost_{name}"] = st.number_input(f"Прямой ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=50000)
+            st.session_state[f"acost_{name}"] = st.number_input(f"Ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=50000)
         
         custom_fleet_params[name] = {
             "qty": qty, "mileage": mileage, "consumption": consumption, 
@@ -136,7 +144,6 @@ for name, p_default in presets.items():
             "accidents_year": accidents, "accident_cost": st.session_state[f"acost_{name}"],
             **{k: v for k, v in p_default.items() if "eff" in k}
         }
-        st.sidebar.markdown("---")
 
 total_fleet_size = sum(fleet_quantities.values())
 if total_fleet_size == 0:
@@ -146,9 +153,10 @@ if total_fleet_size == 0:
 # ==========================================
 # 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO И ПЕРСОНАЛОМ
 # ==========================================
+st.sidebar.markdown("---")
 st.sidebar.subheader("Управление TCO, персоналом и лизингом")
 
-with st.sidebar.expander("Потери бэк-офиса, простои и лизинг", expanded=True):
+with st.sidebar.expander("👤 Потери бэк-офиса, простои и лизинг", expanded=False):
     st.session_state["emp_salary"] = st.number_input(f"Затраты на 1 водителя в месяц (ФОТ, {curr_symbol})", value=int(st.session_state["emp_salary"]), step=5000)
     st.session_state["emp_revenue"] = st.number_input(f"Месячный доход от 1 сотрудника на ТС ({curr_symbol})", value=int(st.session_state["emp_revenue"]), step=50000)
     
@@ -207,6 +215,7 @@ total_lease_risk_before = lease_risk_per_car_month * total_fleet_size * (lease_s
 # ==========================================
 # 5. СЕКЦИЯ САЙДБАРА: НАСТРОЙКИ МОДУЛЕЙ SKAI
 # ==========================================
+st.sidebar.markdown("---")
 st.sidebar.subheader("Модули платформы SKAI")
 available_modules = ["Видеоаналитика", "Базовый Мониторинг", "Безопасное вождение", "Контроль топлива", "Сервис аналитики и реагирования"]
 selected_modules = [m for m in available_modules if st.sidebar.checkbox(m, value=(m in ["Видеоаналитика", "Базовый Мониторинг"]))]
@@ -220,7 +229,7 @@ savings_by_cat = {"fuel": 0, "maint": 0, "acc_direct": 0, "acc_tco": 0, "fines":
 
 # --- БАЗОВЫЙ МОНИТОРИНГ ---
 if "Базовый Мониторинг" in selected_modules:
-    with st.sidebar.expander("Модуль: Базовый Мониторинг", expanded=False):
+    with st.sidebar.expander("📡 Модуль: Базовый Мониторинг", expanded=False):
         st.session_state["b_cap"] = st.number_input(f"Трекер на 1 ТС ({curr_symbol})", value=int(st.session_state["b_cap"]), step=1000)
         st.session_state["b_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["b_op"]), step=50)
         eff_fuel = st.slider("Сокращение пробега и ГСМ (%)", 0.0, 25.0, 8.0, step=0.5) / 100
@@ -241,7 +250,7 @@ if "Базовый Мониторинг" in selected_modules:
 
 # --- СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
 if "Сервис аналитики и реагирования" in selected_modules:
-    with st.sidebar.expander("Сервис аналитики и реагирования", expanded=False):
+    with st.sidebar.expander("🛠️ Сервис аналитики и реагирования", expanded=False):
         st.session_state["s_cap"] = st.number_input(f"Единовременные затраты ({curr_symbol})", value=int(st.session_state["s_cap"]), step=10000)
         st.session_state["s_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["s_op"]), step=100)
         s_eff_disp = st.slider("Сокращение затрат на ФОТ диспетчеров (%)", 0, 100, 60, step=5) / 100
@@ -251,7 +260,7 @@ if "Сервис аналитики и реагирования" in selected_mod
 
 # --- ВИДЕОАНАЛИТИКА ---
 if "Видеоаналитика" in selected_modules:
-    with st.sidebar.expander("Модуль: Видеоаналитика", expanded=False):
+    with st.sidebar.expander("📷 Модуль: Видеоаналитика", expanded=False):
         st.session_state["v_cap"] = st.number_input(f"Оборудование на 1 ТС ({curr_symbol})", value=int(st.session_state["v_cap"]), step=5000)
         st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
         v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 55, step=5) / 100
@@ -264,7 +273,7 @@ if "Видеоаналитика" in selected_modules:
 
 # --- БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
 if "Безопасное вождение" in selected_modules:
-    with st.sidebar.expander("Модуль: Безопасное вождение", expanded=False):
+    with st.sidebar.expander("🛡️ Модуль: Безопасное вождение", expanded=False):
         st.session_state["sd_cap"] = st.number_input(f"Стоимость модуля на 1 ТС ({curr_symbol})", value=int(st.session_state["sd_cap"]), step=1000)
         st.session_state["sd_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["sd_op"]), step=50)
         sd_eff_to = st.slider("Доп. экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
@@ -279,7 +288,7 @@ if "Безопасное вождение" in selected_modules:
 
 # --- КОНТРОЛЬ ТОПЛИВА ---
 if "Контроль топлива" in selected_modules:
-    with st.sidebar.expander("Модуль: Контроль топлива", expanded=False):
+    with st.sidebar.expander("⛽ Модуль: Контроль топлива", expanded=False):
         st.session_state["f_cap"] = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(st.session_state["f_cap"]), step=2000)
         st.session_state["f_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["f_op"]), step=50)
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, 10.0, step=0.5) / 100
@@ -359,7 +368,7 @@ with chart_col2:
     st.plotly_chart(fig_pie, use_container_width=True)
 
 # ==========================================
-# 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ (КАК НА СКРИНШОТЕ)
+# 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ
 # ==========================================
 st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
@@ -388,7 +397,7 @@ df_payback = pd.DataFrame(payback_rows)
 fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
 max_abs_effect = df_payback[col_effect].abs().max()
 
-# Форматирование, создание Data Bars И жесткое скрытие системных строк Pandas через .hide()
+# Форматирование и скрытие системных строк Pandas через .hide()
 styled_payback = df_payback.style.format({
     col_month: "{:d}",
     col_costs: fmt_style,
@@ -402,7 +411,7 @@ styled_payback = df_payback.style.format({
     color=['#FF4B4B', '#00CC96']
 ).hide(axis='index')
 
-# Базовый лаконичный CSS (без принудительного растяжения контейнеров на весь экран)
+# Дефолтный аккуратный CSS
 custom_css = """
 <style>
     .table-container {
