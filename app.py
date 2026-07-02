@@ -40,12 +40,21 @@ def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
 
 # ==========================================
-# 2. СЕКЦИЯ САЙДБАРА: ОСНОВНЫЕ НАСТРОЙКИ
+# 2. СЕКЦИЯ САЙДБАРА: НАСТРОЙКИ И ВАЛЮТА
 # ==========================================
 st.sidebar.header("Параметры и конфигурация")
+
+# Угловой переключатель валют
+currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
+is_kzt = "KZT" in currency_choice
+curr_symbol = "₸" if is_kzt else "₽"
+curr_rate = 6.13 if is_kzt else 1.0  # Актуальный курс пересчета
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("Состав и параметры ТС")
 
-fuel_price = st.sidebar.number_input("Цена топлива (руб./литр)", min_value=1.0, value=65.0, step=1.0)
+default_fuel_price = 65.0 if not is_kzt else 398.0
+fuel_price = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(default_fuel_price), step=1.0)
 st.sidebar.markdown("---")
 
 fleet_quantities = {}
@@ -68,9 +77,9 @@ for name, p_default in presets.items():
         with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
-            maintenance = st.number_input("ТО + расходники 1 ТС в год (руб.)", min_value=0, value=p_default["maintenance"], step=5000, key=f"maint_{name}")
+            maintenance = st.number_input(f"ТО + расходники 1 ТС в год ({curr_symbol})", min_value=0, value=int(p_default["maintenance"] * curr_rate), step=5000, key=f"maint_{name}")
             accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, value=float(default_accidents), step=0.5, key=f"acc_{name}")
-            acc_cost = st.number_input("Прямой ущерб/франшиза 1 ДТП (руб.)", min_value=0, value=p_default["accident_cost"], step=50000, key=f"acost_{name}")
+            acc_cost = st.number_input(f"Прямой ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(p_default["accident_cost"] * curr_rate), step=50000, key=f"acost_{name}")
         
         custom_fleet_params[name] = {
             "qty": qty, "mileage": mileage, "consumption": consumption, "maintenance": maintenance,
@@ -92,17 +101,17 @@ st.sidebar.subheader("Управление TCO, персоналом и лизи
 
 with st.sidebar.expander("Потери бэк-офиса, простои и лизинг", expanded=True):
     st.caption("Параметры для расчета скрытых издержек компании (модель оптимизации TCO)")
-    emp_salary = st.number_input("Затраты на 1 сотрудника/водителя в месяц (ФОТ+налоги)", value=100000, step=5000)
-    emp_revenue = st.number_input("Месячный доход/выработка от 1 сотрудника на ТС", value=1200000, step=50000)
+    emp_salary = st.number_input(f"Затраты на 1 сотрудника/водителя в месяц (ФОТ, {curr_symbol})", value=int(100000 * curr_rate), step=5000)
+    emp_revenue = st.number_input(f"Месячный доход/выработка от 1 сотрудника на ТС ({curr_symbol})", value=int(1200000 * curr_rate), step=50000)
     
     st.markdown("**Диспетчеризация и администрирование**")
-    disp_salary = st.number_input("ФОТ 1 диспетчера/оператора парка в месяц", value=80000, step=5000)
+    disp_salary = st.number_input(f"ФОТ 1 диспетчера/оператора парка в месяц ({curr_symbol})", value=int(80000 * curr_rate), step=5000)
     calculated_disp_qty = max(1.0, round(total_fleet_size / 25, 1))
     disp_qty = st.number_input("Текущее кол-во диспетчеров в штате (база)", value=float(calculated_disp_qty), step=0.5)
     
     st.markdown("**Издержки при инцидентах**")
     downtime_days = st.number_input("Средний простой ТС после ДТП (дней)", value=14, step=1)
-    manager_hourly_rate = st.number_input("Стоимость 1 часа работы бэк-офиса", value=500, step=50)
+    manager_hourly_rate = st.number_input(f"Стоимость 1 часа работы бэк-офиса ({curr_symbol})", value=int(500 * curr_rate), step=50)
     time_manager_accident = st.number_input("Время менеджера на 1 ДТП (часов)", value=8, step=1)
     
     st.markdown("**Условия владения и штрафы**")
@@ -111,13 +120,13 @@ with st.sidebar.expander("Потери бэк-офиса, простои и ли
     
     if lease_share > 0:
         lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
-        lease_return_cost = st.number_input("Выплаты лизинговой при возврате (на 1 ТС)", value=50000, step=5000)
+        lease_return_cost = st.number_input(f"Выплаты лизинговой при возврате (на 1 ТС, {curr_symbol})", value=int(50000 * curr_rate), step=5000)
     else:
         lease_term = 48
         lease_return_cost = 0
 
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
-    fine_avg_cost = st.number_input("Средняя стоимость 1 штрафа (руб)", value=500, step=100)
+    fine_avg_cost = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(500 * curr_rate), step=100)
     time_manager_fine = st.number_input("Время на обработку 1 штрафа (часов)", value=0.5, step=0.1)
 
 st.sidebar.markdown("---")
@@ -187,8 +196,8 @@ savings_by_cat = {"fuel": 0, "maint": 0, "acc_direct": 0, "acc_tco": 0, "fines":
 # --- МОДУЛЬ: БАЗОВЫЙ МОНИТОРИНГ ---
 if "Базовый Мониторинг" in selected_modules:
     with st.sidebar.expander("Модуль: Базовый Мониторинг", expanded=True):
-        b_capex = st.number_input("Стоимость трекера на 1 ТС", value=int(get_weighted_value("base_capex")), step=1000, key="b_cap")
-        b_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("base_opex")), step=50, key="b_op")
+        b_capex = st.number_input(f"Стоимость трекера на 1 ТС ({curr_symbol})", value=int(get_weighted_value("base_capex") * curr_rate), step=1000, key="b_cap")
+        b_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("base_opex") * curr_rate), step=50, key="b_op")
         
         st.markdown("**Целевые эффекты базового контроля:**")
         eff_fuel = st.slider("Сокращение пробега и расхода ГСМ (%)", 0.0, 25.0, float(get_weighted_value("base_eff_fuel")), step=0.5) / 100
@@ -219,8 +228,8 @@ if "Базовый Мониторинг" in selected_modules:
 # --- МОДУЛЬ: СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
 if "Сервис аналитики и реагирования" in selected_modules:
     with st.sidebar.expander("Сервис аналитики и реагирования", expanded=True):
-        s_capex = st.number_input("Единовременные затраты (настройка интеграций и SLA)", value=40000, step=10000, key="s_cap")
-        s_opex = st.number_input("АП на 1 ТС/мес (ситуационный центр)", value=900, step=100, key="s_op")
+        s_capex = st.number_input(f"Единовременные затраты ({curr_symbol})", value=int(40000 * curr_rate), step=10000, key="s_cap")
+        s_opex = st.number_input(f"АП на 1 ТС/мес (ситуационный центр) ({curr_symbol})", value=int(900 * curr_rate), step=100, key="s_op")
         s_eff_disp = st.slider("Сокращение затрат на ФОТ диспетчеров (%)", 0, 100, 60, step=5) / 100
         
         s_tco_saving = total_disp_fot_before * s_eff_disp
@@ -232,14 +241,13 @@ if "Сервис аналитики и реагирования" in selected_mod
         savings_by_cat["disp"] += s_tco_saving
 
 # --- МОДУЛЬ: ВИДЕОАНАЛИТИКА ---
-if "Videoanalytics" in selected_modules or "Видеоаналитика" in selected_modules:
+if "Видеоаналитика" in selected_modules:
     with st.sidebar.expander("Модуль: Видеоаналитика", expanded=True):
-        v_capex = st.number_input("Стоимость оборудования на 1 ТС", value=int(get_weighted_value("video_capex")), step=5000, key="v_cap")
-        v_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("video_opex")), step=100, key="v_op")
+        v_capex = st.number_input(f"Стоимость оборудования на 1 ТС ({curr_symbol})", value=int(get_weighted_value("video_capex") * curr_rate), step=5000, key="v_cap")
+        v_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("video_opex") * curr_rate), step=100, key="v_op")
         
         v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, int(get_weighted_value("video_eff")), step=5) / 100
         
-        # Данные берутся напрямую из глобальных вычислений на базе настроек ТС, исключая дублирование ввода
         v_direct_damage_monthly = total_direct_accident_damage_before / 12
         v_tco_damage_monthly = total_tco_accident_damage_before / 12
         
@@ -256,8 +264,8 @@ if "Videoanalytics" in selected_modules or "Видеоаналитика" in sel
 # --- МОДУЛЬ: БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
 if "Безопасное вождение" in selected_modules:
     with st.sidebar.expander("Модуль: Безопасное вождение", expanded=True):
-        sd_capex = st.number_input("Стоимость модуля на 1 ТС", value=int(get_weighted_value("safe_capex")), step=1000, key="sd_cap")
-        sd_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("safe_opex")), step=50, key="sd_op")
+        sd_capex = st.number_input(f"Стоимость модуля на 1 ТС ({curr_symbol})", value=int(get_weighted_value("safe_capex") * curr_rate), step=1000, key="sd_cap")
+        sd_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("safe_opex") * curr_rate), step=50, key="sd_op")
         sd_eff_to = st.slider("Доп. экономия на ТО от бережной езды (%)", 0, 40, int(get_weighted_value("safe_eff_to")), step=5) / 100
         sd_eff_acc = st.slider("Доп. снижение ДТП от скоринга (%)", 0, 40, int(get_weighted_value("safe_eff_acc")), step=5) / 100
         
@@ -275,8 +283,8 @@ if "Безопасное вождение" in selected_modules:
 # --- МОДУЛЬ: КОНТРОЛЬ ТОПЛИВА ---
 if "Контроль топлива" in selected_modules:
     with st.sidebar.expander("Модуль: Контроль топлива", expanded=True):
-        f_capex = st.number_input("Стоимость ДУТ на 1 ТС", value=int(get_weighted_value("fuel_capex")), step=2000, key="f_cap")
-        f_opex = st.number_input("АП на 1 ТС/мес", value=int(get_weighted_value("fuel_opex")), step=50, key="f_op")
+        f_capex = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(get_weighted_value("fuel_capex") * curr_rate), step=2000, key="f_cap")
+        f_opex = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(get_weighted_value("fuel_opex") * curr_rate), step=50, key="f_op")
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, float(get_weighted_value("fuel_eff")), step=0.5) / 100
         
         f_direct_saving = total_fuel_before * f_eff
@@ -317,13 +325,13 @@ payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 el
 
 st.subheader("Экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
-m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} ₽")
-m2.metric("Сэкономленный бюджет / мес (чистый)", f"{fmt(net_monthly_benefit)} ₽")
+m1.metric("Стартовые инвестиции (Capex)", f"{fmt(total_capex)} {curr_symbol}")
+m2.metric("Сэкономленный бюджет / мес (чистый)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
 m3.metric("Срок окупаемости инвестиций", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
 
 st.markdown("---")
 
-st.subheader("Детализация влияния факторов на издержки автопарка (в месяц)")
+st.subheader(f"Детализация влияния факторов на издержки автопарка (в месяц)")
 
 tco_table_data = [
     ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
@@ -342,7 +350,7 @@ if lease_share > 0:
         "Косвенный (TCO)"
     ])
 
-df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", "Базовые затраты до внедрения (₽/мес)", "Прогноз экономии от SKAI (₽/мес)", "Тип фактора"])
+df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", f"Базовые затраты до внедрения ({curr_symbol}/мес)", f"Прогноз экономии от SKAI ({curr_symbol}/мес)", "Тип фактора"])
 st.dataframe(df_tco, use_container_width=True, hide_index=True)
 
 st.markdown("---")
@@ -361,7 +369,6 @@ for m in months:
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
         m_net_monthly = m_saving - metrics["opex"]
-        # Считаем сохраненные средства нарастающим итогом
         accumulated_value = m_net_monthly * m
         row[module_name] = max(0.0, accumulated_value)
         
@@ -375,7 +382,7 @@ df_area = pd.DataFrame(area_chart_data)
 chart_col1, chart_col2 = st.columns([2, 1])
 
 with chart_col1:
-    st.markdown("**Динамика накопления сэкономленных средств по месяцам**")
+    st.markdown(f"**Динамика накопления сэкономленных средств по месяцам ({curr_symbol})**")
     
     fig_area = px.area(
         df_area,
@@ -387,25 +394,24 @@ with chart_col1:
     fig_area.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         xaxis_title="Месяц эксплуатации системы",
-        yaxis_title="Совокупная экономия (₽)",
+        yaxis_title=f"Совокупная экономия ({curr_symbol})",
         hovermode="x unified",
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
     )
     
     st.plotly_chart(fig_area, use_container_width=True)
-    st.caption("График иллюстрирует динамику удержания средств. Слои отражают вклад каждого продукта в общий объем сохраненного бюджета компании на временной шкале.")
 
 with chart_col2:
     st.markdown("**Структура совокупной экономии за 36 месяцев**")
     
     df_pie = pd.DataFrame([
-        {"Продукт": k, "Совокупная экономия (₽)": v} for k, v in total_savings_by_module.items()
+        {"Продукт": k, f"Совокупная экономия ({curr_symbol})": v} for k, v in total_savings_by_module.items()
     ])
     
     fig_pie = px.pie(
         df_pie, 
-        values="Совокупная экономия (₽)", 
+        values=f"Совокупная экономия ({curr_symbol})", 
         names="Продукт",
         hole=0.4,
         color_discrete_sequence=px.colors.qualitative.Safe
@@ -418,4 +424,3 @@ with chart_col2:
     )
     
     st.plotly_chart(fig_pie, use_container_width=True)
-    st.caption("Распределение долей сохраненного бюджета по продуктам. Позволяет мгновенно определить ключевые драйверы снижения совокупной стоимости владения (TCO) автопарка.")
