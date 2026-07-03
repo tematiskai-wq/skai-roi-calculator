@@ -296,7 +296,7 @@ if "Контроль топлива" in selected_modules:
         savings_by_cat["fuel"] += total_fuel_before * f_eff
 
 # ==========================================
-# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК (ИСПРАВЛЕННЫЙ ГРАФИК)
+# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК (СТАБИЛЬНАЯ ВЕРСИЯ С ДЛИННЫМ ФОРМАТОМ)
 # ==========================================
 st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
 
@@ -340,16 +340,66 @@ st.dataframe(df_tco, use_container_width=True, hide_index=True)
 st.markdown("---")
 
 st.subheader(f"Динамика окупаемости и чистый эффект по продуктам ({mode_title})")
+
+# Переходим на Long Format структуру для гарантированной стабильности рендеринга Plotly
 months = np.arange(1, 37)
-chart_data = []
-total_savings_by_module = {m_name: 0.0 for m_name in modules_payload.keys()}
+chart_rows = []
+total_savings_by_module = {}
 
 for m in months:
-    row = {"Месяц": m}
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-        # Математически верный расчет: (Ежемесячная экономия - OPEX) * Месяц - Единовременный CAPEX
         accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
+        
+        # Формируем плоскую структуру таблицы (строка под каждую точку)
+        chart_rows.append({
+            "Месяц": m,
+            "Продукт": module_name,
+            "Чистый финансовый эффект": accumulated_net_effect
+        })
+        
+        if m == 36:
+            total_savings_by_module[module_name] = max(0.0, accumulated_net_effect)
+
+df_chart = pd.DataFrame(chart_rows)
+
+chart_col1, chart_col2 = st.columns([2, 1])
+with chart_col1:
+    # Отрисовка длинного формата через явное указание столбца color
+    fig_line = px.line(
+        df_chart, 
+        x="Месяц", 
+        y="Чистый финансовый эффект", 
+        color="Продукт", 
+        color_discrete_sequence=px.colors.qualitative.Safe
+    )
+    
+    # Красный пунктир окупаемости на уровне 0
+    fig_line.add_hline(y=0, line_dash="dash", line_color="#FF4B4B", annotation_text="Точка окупаемости", annotation_position="bottom right")
+    
+    fig_line.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10), 
+        xaxis_title="Месяц", 
+        yaxis_title=f"Чистый финансовый эффект ({curr_symbol})", 
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+    
+with chart_col2:
+    # Защитный блок: строим круговую диаграмму только если есть положительная ценность
+    if sum(total_savings_by_module.values()) > 0:
+        df_pie = pd.DataFrame([{"Продукт": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
+        fig_pie = px.pie(
+            df_pie, 
+            values="Чистая ценность (36 мес)", 
+            names="Продукт", 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        fig_pie.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("К 36-му месяцу продукты еще не вышли в чистую прибыль для отображения долей на диаграмме.")
 
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ
