@@ -349,7 +349,7 @@ for m in months:
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
         # Математически верный расчет: (Ежемесячная экономия - OPEX) * Месяц - Единовременный CAPEX
-        accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics
+        accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
 
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ
