@@ -341,15 +341,19 @@ st.markdown("---")
 
 st.subheader(f"Динамика окупаемости и чистый эффект по продуктам ({mode_title})")
 
-# Переходим на Long Format структуру для гарантированной стабильности рендеринга Plotly
-months = np.arange(1, 37)
+# Включаем Месяц 0 в массив для явного отображения стартовых инвестиций
+months = np.arange(0, 37)
 chart_rows = []
 total_savings_by_module = {}
 
 for m in months:
     for module_name, metrics in modules_payload.items():
-        m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-        accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
+        if m == 0:
+            # В Месяц 0 финансовый эффект строго равен величине CAPEX со знаком минус
+            accumulated_net_effect = -metrics["capex"]
+        else:
+            m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
+            accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
         
         # Формируем плоскую структуру таблицы (строка под каждую точку)
         chart_rows.append({
@@ -388,11 +392,11 @@ with chart_col1:
 with chart_col2:
     # Защитный блок: строим круговую диаграмму только если есть положительная ценность
     if sum(total_savings_by_module.values()) > 0:
-        df_pie = pd.DataFrame([{"Продукт": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
+        df_pie = pd.DataFrame([{"Проdukt": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
         fig_pie = px.pie(
             df_pie, 
             values="Чистая ценность (36 мес)", 
-            names="Продукт", 
+            names="Проdukt", 
             hole=0.4, 
             color_discrete_sequence=px.colors.qualitative.Safe
         )
