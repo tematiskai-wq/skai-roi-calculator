@@ -296,7 +296,7 @@ if "Контроль топлива" in selected_modules:
         savings_by_cat["fuel"] += total_fuel_before * f_eff
 
 # ==========================================
-# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК
+# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК (ИСПРАВЛЕННЫЙ ГРАФИК)
 # ==========================================
 st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
 
@@ -339,30 +339,17 @@ st.dataframe(df_tco, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
-st.subheader(f"Анализ влияния продуктов на снижение издержек ({mode_title})")
+st.subheader(f"Динамика окупаемости и чистый эффект по продуктам ({mode_title})")
 months = np.arange(1, 37)
-area_chart_data = []
+chart_data = []
 total_savings_by_module = {m_name: 0.0 for m_name in modules_payload.keys()}
 
 for m in months:
     row = {"Месяц": m}
     for module_name, metrics in modules_payload.items():
         m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
-        accumulated_value = (m_saving - metrics["opex"]) * m
-        row[module_name] = max(0.0, accumulated_value)
-        if m == 36:
-            total_savings_by_module[module_name] = max(0.0, accumulated_value)
-    area_chart_data.append(row)
-
-chart_col1, chart_col2 = st.columns([2, 1])
-with chart_col1:
-    fig_area = px.area(pd.DataFrame(area_chart_data), x="Месяц", y=list(modules_payload.keys()), color_discrete_sequence=px.colors.qualitative.Safe)
-    fig_area.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title="Месяц", yaxis_title=f"Экономия ({curr_symbol})", hovermode="x unified")
-    st.plotly_chart(fig_area, use_container_width=True)
-with chart_col2:
-    fig_pie = px.pie(pd.DataFrame([{"Продукт": k, "Экономия": v} for k, v in total_savings_by_module.items()]), values="Экономия", names="Продукт", hole=0.4, color_discrete_sequence=px.colors.qualitative.Safe)
-    fig_pie.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig_pie, use_container_width=True)
+        # Математически верный расчет: (Ежемесячная экономия - OPEX) * Месяц - Единовременный CAPEX
+        accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics
 
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ
