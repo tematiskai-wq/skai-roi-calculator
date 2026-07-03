@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 
 # Настройка страницы в строгом B2B стиле
-st.set_page_config(page_title="Платформа SKAI: Расширенный калькулятор TCO и ROI", layout="wide")
+st.set_page_config(page_title="SKAI Платформа: калькулятор TCO и ROI", layout="wide")
 
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ (БАЗОВЫЕ ЗНАЧЕНИЯ В РУБЛЯХ)
@@ -298,7 +298,7 @@ if "Контроль топлива" in selected_modules:
 # ==========================================
 # 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК (СТАБИЛЬНАЯ ВЕРСИЯ С ДЛИННЫМ ФОРМАТОМ)
 # ==========================================
-st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
+st.title("SKAI Платформа: калькулятор TCO и ROI")
 
 fleet_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
 st.markdown(f"Структура парка: {fleet_str} | Всего: **{total_fleet_size} ТС**")
