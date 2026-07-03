@@ -120,7 +120,6 @@ default_qtys = {
     "Легкий коммерческий транспорт / Корпоративные авто": 15
 }
 
-# Компактный вывод ТС без внутренних разделителей линий с иконками
 for name, p_default in presets.items():
     icon = fleet_icons.get(name, "🚗")
     qty = st.sidebar.number_input(f"{icon} {name} (шт):", min_value=0, value=default_qtys[name], step=5)
@@ -324,7 +323,6 @@ m3.metric("Срок окупаемости инвестиций", f"{payback_per
 
 st.markdown("---")
 
-# Таблица детализации
 tco_table_data = [
     ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
     ["Затраты на ТО и расходники", fmt(total_maint_before), fmt(savings_by_cat["maint"]), "Прямой эффект"],
@@ -341,7 +339,6 @@ st.dataframe(df_tco, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
-# Графики верхнего уровня
 st.subheader(f"Анализ влияния продуктов на снижение издержек ({mode_title})")
 months = np.arange(1, 37)
 area_chart_data = []
@@ -394,19 +391,17 @@ for m in months:
 
 df_payback = pd.DataFrame(payback_rows)
 
-fmt_style = lambda x: f"{x:,.0f}".replace(",", " ")
-max_abs_effect = df_payback[col_effect].abs().max()
-
+# Жесткое форматирование через lambda гарантирует разделители-пробелы
 styled_payback = df_payback.style.format({
-    col_month: "{:d}",
-    col_costs: fmt_style,
-    col_savings: fmt_style,
-    col_effect: fmt_style
+    col_month: lambda x: f"{int(x)}",
+    col_costs: lambda x: f"{int(x):,}".replace(",", " "),
+    col_savings: lambda x: f"{int(x):,}".replace(",", " "),
+    col_effect: lambda x: f"{int(x):,}".replace(",", " ")
 }).bar(
     subset=[col_effect],
     align='mid',
-    vmin=-max_abs_effect,
-    vmax=max_abs_effect,
+    vmin=-df_payback[col_effect].abs().max(),
+    vmax=df_payback[col_effect].abs().max(),
     color=['#FF4B4B', '#00CC96']
 ).hide(axis='index')
 
@@ -444,11 +439,11 @@ html_table = styled_payback.to_html(classes="styled-table")
 st.markdown(f"{custom_css}<div class='table-container'>{html_table}</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 8. МЕТОДОЛОГИЯ И МАТЕМАТИЧЕСКИЙ АППАРАТ РАСЧЕТА
+# 8. МЕТОДОЛОГИЯ И МАТЕМАТИЧЕСКИЙ АППАРАТ РАСЧЕТА (ИСПРАВЛЕННЫЙ RAW-STRING)
 # ==========================================
 st.markdown("---")
 with st.expander("📝 Методология и математический аппарат расчетов", expanded=False):
-    st.markdown("""
+    st.markdown(r"""
     ### 1. Расчет базовых ежемесячных затрат автопарка (до внедрения SKAI)
     
     * **Затраты на ГСМ (Топливо):** Вычисляются на основе годового пробега, нормативного расхода на 100 км и текущей стоимости топлива:  
@@ -460,7 +455,7 @@ with st.expander("📝 Методология и математический а
         $$У_{прямой} = \sum \left( \frac{\text{Кол-во ДТП в год} \times \text{Стоимость 1 ДТП}}{12} \right)$$
         
     * **Скрытые потери TCO от простоя при ДТП:** Включают в себя ФОТ водителя за время простоя, упущенную выгоду (доход от ТС) и административные часы бэк-офиса на разбор инцидента:  
-        $$Потери_{простой} = \text{Кол-во ДТП в год} \times \left( Дней_{простоя} \times (Стоимость_{водителя/день} + Доход_{ТС/день}) + Часы_{менеджера} \times Ставка_{менеджера} \right) / 12$$
+        $$Потери_{простой} = \frac{\text{Кол-во ДТП в год} \times \left( Дней_{простоя} \times (Стоимость_{водителя/день} + Доход_{ТС/день}) + Часы_{менеджера} \times Ставка_{менеджера} \right)}{12}$$
         
     * **Администрирование и оплата штрафов:** $$Потери_{штрафы} = \frac{\text{Штрафов на ТС в год} \times \left( Цена_{штрафа} + Время_{оформления} \times Ставка_{менеджера} \right)}{12} \times Всего_{ТС}$$
         
