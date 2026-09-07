@@ -374,8 +374,52 @@ for m_name, m_data in modules_raw.items():
 # ==========================================
 st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
 
-fleet_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
-st.markdown(f"Структура парка: {fleet_str} | Всего: **{total_fleet_size} ТС**")
+# ==========================================
+# ВИЗУАЛЬНЫЙ БЛОК СТРУКТУРЫ АВТОПАРКА
+# ==========================================
+# Палитра приглушенных корпоративных оттенков для сегментов
+bar_colors = ["#2563EB", "#0EA5E9", "#64748B", "#F59E0B"]
+
+# 1. Формирование тонкой пропорциональной шкалы распределения
+distribution_bar_html = "<div style='display: flex; height: 6px; width: 100%; border-radius: 3px; overflow: hidden; background-color: #E2E8F0; margin: 12px 0 16px 0;'>"
+for idx, (name, cp) in enumerate(custom_fleet_params.items()):
+    qty = cp["qty"]
+    share = (qty / total_fleet_size * 100) if total_fleet_size > 0 else 0
+    color = bar_colors[idx % len(bar_colors)]
+    if share > 0:
+        distribution_bar_html += f"<div style='width: {share}%; background-color: {color};' title='{name}: {share:.1f}%'></div>"
+distribution_bar_html += "</div>"
+
+# 2. Формирование информационных плиток
+cards_html = f"""
+<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;">
+    <div style="flex: 1 1 180px; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 14px 18px;">
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 4px;">Общий объем парка</div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.1;">{total_fleet_size} <span style="font-size: 14px; font-weight: 500; color: #64748B;">ТС</span></div>
+        <div style="font-size: 12px; color: #64748B; margin-top: 6px;">100% расчетной базы</div>
+    </div>
+"""
+
+for idx, (name, cp) in enumerate(custom_fleet_params.items()):
+    clean_name = name.split(" (")[0]
+    qty = cp["qty"]
+    share = (qty / total_fleet_size * 100) if total_fleet_size > 0 else 0
+    color = bar_colors[idx % len(bar_colors)]
+    
+    cards_html += f"""
+    <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {color};"></div>
+            <div style="font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{clean_name}">{clean_name}</div>
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.1;">{qty} <span style="font-size: 14px; font-weight: 500; color: #64748B;">ТС</span></div>
+        <div style="font-size: 12px; font-weight: 600; color: {color}; margin-top: 6px;">{share:.1f}% от парка</div>
+    </div>
+    """
+
+cards_html += "</div>"
+
+st.markdown(distribution_bar_html + cards_html, unsafe_allow_html=True)
 st.markdown("---")
 
 calc_mode = st.radio("Аналитическая модель расчета:", ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь и оптимизации ФОТ)"], horizontal=True)
