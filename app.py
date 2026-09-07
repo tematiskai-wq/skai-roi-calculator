@@ -47,7 +47,6 @@ for name in presets.keys():
 # ==========================================
 # 2. ИНИЦИАЛИЗАЦИЯ И КОНВЕРТАЦИЯ СОСТОЯНИЯ (SESSION STATE)
 # ==========================================
-# Безопасная инициализация: ключи создаются, только если их еще нет в текущей сессии
 st.session_state.setdefault("initialized", True)
 st.session_state.setdefault("prev_currency", "₽ (RUB)")
 st.session_state.setdefault("fuel_price", 65.0)
@@ -279,7 +278,6 @@ if "Видеоаналитика" in selected_modules:
         st.session_state["v_cap"] = st.number_input(f"Оборудование на 1 ТС ({curr_symbol})", value=int(st.session_state["v_cap"]), step=5000)
         st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
         
-        # Целевой показатель снижения ДТП 80%
         v_eff_acc = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 80, step=5) / 100
         acc_eff_va = v_eff_acc
         
@@ -334,7 +332,6 @@ if "Контроль топлива" in selected_modules:
 # ==========================================
 # СИНЕРГЕТИЧЕСКИЙ РАСЧЕТ АВАРИЙНОСТИ И СТРАХОВАНИЯ
 # ==========================================
-# Мультипликативный расчет предотвращения ДТП
 combined_no_accident_prob = (1.0 - acc_eff_bm) * (1.0 - acc_eff_va) * (1.0 - acc_eff_sd)
 total_combined_acc_eff = 1.0 - combined_no_accident_prob
 
@@ -344,12 +341,10 @@ total_tco_acc_saving = ((total_tco_accident_damage_before - total_direct_acciden
 savings_by_cat["acc_direct"] = total_direct_acc_saving
 savings_by_cat["acc_tco"] = total_tco_acc_saving
 
-# Экономия на КАСКО и ОСАГО при снижении аварийности
 has_safety_system = ("Видеоаналитика" in selected_modules or "Безопасное вождение" in selected_modules)
 total_ins_saving = (total_insurance_before * insurance_discount) if has_safety_system else 0.0
 savings_by_cat["insurance"] = total_ins_saving
 
-# Распределение синергетической экономии по модулям пропорционально их вкладу
 sum_acc_weights = sum(m["acc_weight"] for m in modules_raw.values())
 modules_payload = {}
 
@@ -374,9 +369,6 @@ for m_name, m_data in modules_raw.items():
 # ==========================================
 st.title("Платформа SKAI: калькулятор TCO и ROI")
 
-# ==========================================
-# ВИЗУАЛЬНЫЙ БЛОК СТРУКТУРЫ АВТОПАРКА (ИСПРАВЛЕНО)
-# ==========================================
 bar_colors = ["#2563EB", "#0EA5E9", "#64748B", "#F59E0B"]
 
 # 1. Тонкая шкала распределения
@@ -389,7 +381,7 @@ for idx, (name, cp) in enumerate(custom_fleet_params.items()):
         distribution_bar_html += f"<div style='width: {share}%; background-color: {color};' title='{name}: {share:.1f}%'></div>"
 distribution_bar_html += "</div>"
 
-# 2. Карточки автопарка (без внутренних отступов строк)
+# 2. Карточки автопарка
 cards_html = f"""<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;">
 <div style="flex: 1 1 180px; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 14px 18px;">
 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 4px;">Общий объем парка</div>
@@ -454,7 +446,6 @@ rc1.metric(
     f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км"
 )
 
-# delta_color="inverse" окрашивает отрицательную дельту (-80%) в позитивный зеленый цвет
 rc2.metric(
     "Стоимость риска ДТП со SKAI", 
     f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", 
@@ -462,7 +453,6 @@ rc2.metric(
     delta_color="inverse"
 )
 
-# Третий столбец: крупное выделение чистой экономии фирменным зеленым цветом
 with rc3:
     st.markdown(
         f"""
@@ -476,10 +466,90 @@ with rc3:
         unsafe_allow_html=True
     )
 
+st.markdown("---")
+
+# ==========================================
+# ТАБЛИЦА ДЕТАЛИЗАЦИИ РАСХОДОВ
+# ==========================================
+tco_table_data = [
+    ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
+    ["Затраты на ТО и расходники", fmt(total_maint_before), fmt(savings_by_cat["maint"]), "Прямой эффект"],
+    ["Прямой ущерб от аварий / франшизы", fmt(total_direct_accident_damage_before / 12), fmt(savings_by_cat["acc_direct"]), "Прямой эффект"],
+    ["Затраты на страхование (КАСКО и ОСАГО)", fmt(total_insurance_before), fmt(savings_by_cat["insurance"]), "Прямой эффект"],
+    ["Потери от простоя персонала и ТС при ДТП", fmt((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12), fmt(savings_by_cat["acc_tco"] if is_tco else 0), "Косвенный (TCO)"],
+    ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
+    ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"]
+]
+
+df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", f"Базовые затраты до внедрения ({curr_symbol}/мес)", f"Прогноз экономии от SKAI ({curr_symbol}/мес)", "Тип фактора"])
+st.dataframe(df_tco, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+
+# ==========================================
+# ГРАФИКИ ОКУПАЕМОСТИ И ЧИСТОГО ЭФФЕКТА ПО ПРОДУКТАМ
+# ==========================================
+st.subheader(f"Динамика окупаемости и чистый эффект по продуктам ({mode_title})")
+
+months = np.arange(0, 37)
+chart_rows = []
+total_savings_by_module = {}
+
+for m in months:
+    for module_name, metrics in modules_payload.items():
+        if m == 0:
+            accumulated_net_effect = -metrics["capex"]
+        else:
+            m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
+            accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
+        
+        chart_rows.append({
+            "Месяц": m,
+            "Продукт": module_name,
+            "Чистый финансовый эффект": accumulated_net_effect
+        })
+        
+        if m == 36:
+            total_savings_by_module[module_name] = max(0.0, accumulated_net_effect)
+
+df_chart = pd.DataFrame(chart_rows)
+
+chart_col1, chart_col2 = st.columns([2, 1])
+with chart_col1:
+    fig_line = px.line(
+        df_chart, 
+        x="Месяц", 
+        y="Чистый финансовый эффект", 
+        color="Продукт", 
+        color_discrete_sequence=px.colors.qualitative.Safe
+    )
+    fig_line.add_hline(y=0, line_dash="dash", line_color="#FF4B4B", annotation_text="Точка окупаемости", annotation_position="bottom right")
+    fig_line.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10), 
+        xaxis_title="Месяц", 
+        yaxis_title=f"Чистый финансовый эффект ({curr_symbol})", 
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+    
+with chart_col2:
+    if sum(total_savings_by_module.values()) > 0:
+        df_pie = pd.DataFrame([{"Продукт": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
+        fig_pie = px.pie(
+            df_pie, 
+            values="Чистая ценность (36 мес)", 
+            names="Продукт", 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        fig_pie.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("К 36-му месяцу продукты еще не вышли в чистую прибыль для отображения долей на диаграмме.")
+
 # ==========================================
 # 7. ПОДРОБНЫЙ ГРАФИК ОКУПАЕМОСТИ ПО МЕСЯЦАМ
 # ==========================================
-months = np.arange(0, 37)
 st.markdown("---")
 st.subheader("Подробный график окупаемости проекта (моделирование по месяцам)")
 st.markdown("Таблица отражает накопленные затраты (капитальные и операционные) в сопоставлении с валовой накопленной экономией и чистым финансовым эффектом.")
