@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 
 # Настройка страницы в строгом B2B стиле
-st.set_page_config(page_title="SKAI Платформа: калькулятор TCO и ROI", layout="wide")
+st.set_page_config(page_title="Платформа SKAI: Расширенный калькулятор TCO и ROI", layout="wide")
 
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ (БАЗОВЫЕ ЗНАЧЕНИЯ В РУБЛЯХ)
@@ -14,39 +14,31 @@ presets = {
         "fleet_size": 50, "mileage": 120000, "consumption": 32.0, "maintenance": 60000,
         "accidents_year": 8, "accident_cost": 800000,
         "video_capex": 120000, "video_opex": 2000, "video_eff": 55,
-        "base_capex": 15000, "base_opex": 400, "base_eff_fuel": 8, "base_eff_to": 10, "base_eff_fines": 40, "base_eff_lease": 20, "base_eff_acc": 15,
-        "safe_capex": 10000, "safe_opex": 500, "safe_eff_to": 15, "safe_eff_acc": 15,
+        "base_capex": 15000, "base_opex": 400, "base_eff_fuel": 22.0, "base_eff_to": 6.0, "base_eff_fines": 40, "base_eff_acc": 15,
+        "safe_capex": 10000, "safe_opex": 500, "safe_eff_fuel": 10.0, "safe_eff_to": 15, "safe_eff_acc": 75,
         "fuel_capex": 25000, "fuel_opex": 600, "fuel_eff": 10
     },
     "Самосвал / Тяжелая спецтехника": {
         "fleet_size": 30, "mileage": 45000, "consumption": 45.0, "maintenance": 90000,
         "accidents_year": 6, "accident_cost": 600000,
         "video_capex": 130000, "video_opex": 2000, "video_eff": 50,
-        "base_capex": 15000, "base_opex": 400, "base_eff_fuel": 6, "base_eff_to": 8, "base_eff_fines": 30, "base_eff_lease": 15, "base_eff_acc": 10,
-        "safe_capex": 10000, "safe_opex": 500, "safe_eff_to": 20, "safe_eff_acc": 10,
+        "base_capex": 15000, "base_opex": 400, "base_eff_fuel": 22.0, "base_eff_to": 6.0, "base_eff_fines": 30, "base_eff_acc": 10,
+        "safe_capex": 10000, "safe_opex": 500, "safe_eff_fuel": 10.0, "safe_eff_to": 20, "safe_eff_acc": 75,
         "fuel_capex": 30000, "fuel_opex": 600, "fuel_eff": 12
     },
     "Легкий коммерческий транспорт / Корпоративные авто": {
         "fleet_size": 40, "mileage": 60000, "consumption": 13.0, "maintenance": 35000,
         "accidents_year": 7, "accident_cost": 300000,
         "video_capex": 110000, "video_opex": 1800, "video_eff": 60,
-        "base_capex": 12000, "base_opex": 350, "base_eff_fuel": 10, "base_eff_to": 12, "base_eff_fines": 60, "base_eff_lease": 30, "base_eff_acc": 20,
-        "safe_capex": 8000, "safe_opex": 400, "safe_eff_to": 12, "safe_eff_acc": 20,
+        "base_capex": 12000, "base_opex": 350, "base_eff_fuel": 22.0, "base_eff_to": 6.0, "base_eff_fines": 60, "base_eff_acc": 20,
+        "safe_capex": 8000, "safe_opex": 400, "safe_eff_fuel": 10.0, "safe_eff_to": 12, "safe_eff_acc": 75,
         "fuel_capex": 20000, "fuel_opex": 500, "fuel_eff": 8
     }
 }
 
-# Иконки для типов транспортных средств
-fleet_icons = {
-    "Магистральный тягач (Фура)": "🚛",
-    "Самосвал / Тяжелая спецтехника": "🏗️",
-    "Легкий коммерческий транспорт / Корпоративные авто": "🚐"
-}
-
-# Сбор списка всех финансовых ключей для умной конвертации валют
 monetary_keys = [
     "fuel_price", "emp_salary", "emp_revenue", "disp_salary", 
-    "manager_hourly_rate", "lease_return_cost", "fine_avg_cost", "s_cap", "s_op",
+    "manager_hourly_rate", "fine_avg_cost", "s_cap", "s_op",
     "b_cap", "b_op", "v_cap", "v_op", "sd_cap", "sd_op", "f_cap", "f_op"
 ]
 for name in presets.keys():
@@ -63,7 +55,6 @@ if "initialized" not in st.session_state:
     st.session_state["emp_revenue"] = 1200000
     st.session_state["disp_salary"] = 80000
     st.session_state["manager_hourly_rate"] = 500
-    st.session_state["lease_return_cost"] = 50000
     st.session_state["fine_avg_cost"] = 500
     st.session_state["s_cap"] = 40000
     st.session_state["s_op"] = 900
@@ -93,7 +84,6 @@ currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)
 is_kzt = "KZT" in currency_choice
 curr_symbol = "₸" if is_kzt else "₽"
 
-# Пересчет значений ВНУТРИ сессии ТОЛЬКО при физическом переключении радио-кнопки
 if currency_choice != st.session_state["prev_currency"]:
     factor = 6.13 if is_kzt else (1 / 6.13)
     for k in monetary_keys:
@@ -104,7 +94,6 @@ if currency_choice != st.session_state["prev_currency"]:
                 st.session_state[k] = round(st.session_state[k] * factor)
     st.session_state["prev_currency"] = currency_choice
 
-# Цена топлива в блоке основной конфигурации
 st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
 fuel_price = st.session_state["fuel_price"]
 
@@ -121,15 +110,14 @@ default_qtys = {
 }
 
 for name, p_default in presets.items():
-    icon = fleet_icons.get(name, "🚗")
-    qty = st.sidebar.number_input(f"{icon} {name} (шт):", min_value=0, value=default_qtys[name], step=5)
+    qty = st.sidebar.number_input(f"{name} (шт):", min_value=0, value=default_qtys[name], step=5)
     
     if qty > 0:
         fleet_quantities[name] = qty
         default_accidents = p_default["accidents_year"] * (qty / p_default["fleet_size"])
         clean_name = name.split(" (")[0]
         
-        with st.sidebar.expander(f"⚙️ Настройки: {clean_name}", expanded=False):
+        with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
             
@@ -150,12 +138,12 @@ if total_fleet_size == 0:
     st.stop()
 
 # ==========================================
-# 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO И ПЕРСОНАЛОМ
+# 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO И ПЕРСОНАЛОМ (БЕЗ ЛИЗИНГА)
 # ==========================================
 st.sidebar.markdown("---")
-st.sidebar.subheader("Управление TCO, персоналом и лизингом")
+st.sidebar.subheader("Управление TCO и персоналом")
 
-with st.sidebar.expander("👤 Потери бэк-офиса, простои и лизинг", expanded=False):
+with st.sidebar.expander("Потери бэк-офиса и простои персонала", expanded=False):
     st.session_state["emp_salary"] = st.number_input(f"Затраты на 1 водителя в месяц (ФОТ, {curr_symbol})", value=int(st.session_state["emp_salary"]), step=5000)
     st.session_state["emp_revenue"] = st.number_input(f"Месячный доход от 1 сотрудника на ТС ({curr_symbol})", value=int(st.session_state["emp_revenue"]), step=50000)
     
@@ -169,20 +157,11 @@ with st.sidebar.expander("👤 Потери бэк-офиса, простои и
     st.session_state["manager_hourly_rate"] = st.number_input(f"Стоимость 1 часа работы бэк-офиса ({curr_symbol})", value=int(st.session_state["manager_hourly_rate"]), step=50)
     time_manager_accident = st.number_input("Время менеджера на 1 ДТП (часов)", value=8, step=1)
     
-    st.markdown("**Условия владения и штрафы**")
-    lease_share = st.slider("Доля лизинговых ТС в парке (%)", min_value=0, max_value=100, value=60, step=5)
-    
-    if lease_share > 0:
-        lease_term = st.number_input("Стандартный срок лизинга (мес)", min_value=1, value=48, step=12)
-        st.session_state["lease_return_cost"] = st.number_input(f"Выплаты лизинговой при возврате (на 1 ТС, {curr_symbol})", value=int(st.session_state["lease_return_cost"]), step=5000)
-    else:
-        lease_term, st.session_state["lease_return_cost"] = 48, 0
-
+    st.markdown("**Штрафы автопарка**")
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = st.number_input("Время на обработку 1 штрафа (часов)", value=0.5, step=0.1)
 
-# Математические константы на базе session_state
 working_days_month = 21.7
 employee_daily_cost = st.session_state["emp_salary"] / working_days_month
 employee_daily_revenue = st.session_state["emp_revenue"] / working_days_month
@@ -193,10 +172,8 @@ def get_total_accident_cost(direct_cost):
     return direct_cost + downtime_loss + management_loss
 
 fine_loss_per_car_month = (fines_per_car_year * (st.session_state["fine_avg_cost"] + (time_manager_fine * st.session_state["manager_hourly_rate"]))) / 12
-lease_risk_per_car_month = st.session_state["lease_return_cost"] / lease_term if lease_term > 0 else 0
 total_disp_fot_before = disp_qty * st.session_state["disp_salary"]
 
-# Базовый расчет расходов ДО внедрения системы
 total_fuel_before, total_maint_before, total_accidents_year = 0, 0, 0
 total_direct_accident_damage_before, total_tco_accident_damage_before = 0, 0
 
@@ -209,7 +186,6 @@ for name, cp in custom_fleet_params.items():
     total_tco_accident_damage_before += cp["accidents_year"] * get_total_accident_cost(cp["accident_cost"])
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
-total_lease_risk_before = lease_risk_per_car_month * total_fleet_size * (lease_share / 100)
 
 # ==========================================
 # 5. СЕКЦИЯ САЙДБАРА: НАСТРОЙКИ МОДУЛЕЙ SKAI
@@ -224,87 +200,133 @@ if not selected_modules:
     st.stop()
 
 modules_payload = {}
-savings_by_cat = {"fuel": 0, "maint": 0, "acc_direct": 0, "acc_tco": 0, "fines": 0, "lease": 0, "disp": 0}
+savings_by_cat = {"fuel": 0, "maint": 0, "acc_direct": 0, "acc_tco": 0, "fines": 0, "disp": 0}
 
 # --- БАЗОВЫЙ МОНИТОРИНГ ---
 if "Базовый Мониторинг" in selected_modules:
-    with st.sidebar.expander("📡 Модуль: Базовый Мониторинг", expanded=False):
-        st.session_state["b_cap"] = st.number_input(f"Трекер на 1 ТС ({curr_symbol})", value=int(st.session_state["b_cap"]), step=1000)
-        st.session_state["b_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["b_op"]), step=50)
-        eff_fuel = st.slider("Сокращение пробега и ГСМ (%)", 0.0, 25.0, 8.0, step=0.5) / 100
-        eff_to = st.slider("Сокращение износа и ТО (%)", 0.0, 25.0, 10.0, step=0.5) / 100
-        eff_fines = st.slider("Сокращение штрафов (%)", 0, 100, 40, step=5) / 100
-        eff_lease = st.slider("Снижение выплат лизинговой (%)", 0, 100, 20, step=5) / 100 if lease_share > 0 else 0.0
-        eff_acc = st.slider("Сокращение ДТП (геозоны) (%)", 0, 100, 15, step=5) / 100
+    with st.sidebar.expander("Модуль: Базовый Мониторинг", expanded=True):
+        has_gps_status = st.radio(
+            "Оснащенность автопарка GPS:",
+            ["GPS-оборудование отсутствует", "GPS уже установлен на ТС"],
+            key="has_gps_status"
+        )
+        is_gps_installed = (has_gps_status == "GPS уже установлен на ТС")
+        
+        # Автоматические максимальные коэффициенты и CAPEX по документации
+        default_b_capex = 0 if is_gps_installed else int(15000 * (6.13 if is_kzt else 1.0))
+        default_b_fuel = 10.0 if is_gps_installed else 22.0
+        default_b_to = 4.0 if is_gps_installed else 6.0
+        default_b_fines = 20 if is_gps_installed else 40
+        default_b_acc = 10 if is_gps_installed else 15
+
+        b_capex_input = st.number_input(f"Затраты на оснащение/трекер на 1 ТС ({curr_symbol})", min_value=0, value=default_b_capex, step=1000, key=f"b_cap_{is_gps_installed}")
+        b_opex_input = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["b_op"]), step=50, key="b_op_input")
+        
+        eff_fuel = st.slider("Сокращение пробега и ГСМ (%)", 0.0, 30.0, float(default_b_fuel), step=0.5, key=f"eff_fuel_{is_gps_installed}") / 100
+        eff_to = st.slider("Сокращение износа и ТО (%)", 0.0, 20.0, float(default_b_to), step=0.5, key=f"eff_to_{is_gps_installed}") / 100
+        eff_fines = st.slider("Сокращение штрафов (%)", 0, 100, int(default_b_fines), step=5, key=f"eff_fines_{is_gps_installed}") / 100
+        eff_acc = st.slider("Сокращение ДТП (геозоны) (%)", 0, 100, int(default_b_acc), step=5, key=f"eff_acc_{is_gps_installed}") / 100
 
         b_dir = (total_fuel_before * eff_fuel) + (total_maint_before * eff_to) + ((total_direct_accident_damage_before / 12) * eff_acc)
-        b_tco = (total_fines_loss_before * eff_fines) + (total_lease_risk_before * eff_lease) + (((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc)
-        modules_payload["Базовый Мониторинг"] = {"capex": st.session_state["b_cap"] * total_fleet_size, "opex": st.session_state["b_op"] * total_fleet_size, "direct": b_dir, "tco": b_tco}
+        b_tco = (total_fines_loss_before * eff_fines) + (((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc)
+        
+        modules_payload["Базовый Мониторинг"] = {
+            "capex": b_capex_input * total_fleet_size, 
+            "opex": b_opex_input * total_fleet_size, 
+            "direct": b_dir, 
+            "tco": b_tco
+        }
         savings_by_cat["fuel"] += total_fuel_before * eff_fuel
         savings_by_cat["maint"] += total_maint_before * eff_to
         savings_by_cat["acc_direct"] += (total_direct_accident_damage_before / 12) * eff_acc
         savings_by_cat["fines"] += total_fines_loss_before * eff_fines
-        savings_by_cat["lease"] += total_lease_risk_before * eff_lease
         savings_by_cat["acc_tco"] += ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * eff_acc
 
 # --- СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
 if "Сервис аналитики и реагирования" in selected_modules:
-    with st.sidebar.expander("🛠️ Сервис аналитики и реагирования", expanded=False):
+    with st.sidebar.expander("Сервис аналитики и реагирования", expanded=False):
         st.session_state["s_cap"] = st.number_input(f"Единовременные затраты ({curr_symbol})", value=int(st.session_state["s_cap"]), step=10000)
         st.session_state["s_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["s_op"]), step=100)
         s_eff_disp = st.slider("Сокращение затрат на ФОТ диспетчеров (%)", 0, 100, 60, step=5) / 100
         
-        modules_payload["Сервис аналитики и реагирования"] = {"capex": st.session_state["s_cap"], "opex": st.session_state["s_op"] * total_fleet_size, "direct": 0, "tco": total_disp_fot_before * s_eff_disp}
+        modules_payload["Сервис аналитики и реагирования"] = {
+            "capex": st.session_state["s_cap"], 
+            "opex": st.session_state["s_op"] * total_fleet_size, 
+            "direct": 0, 
+            "tco": total_disp_fot_before * s_eff_disp
+        }
         savings_by_cat["disp"] += total_disp_fot_before * s_eff_disp
 
 # --- ВИДЕОАНАЛИТИКА ---
 if "Видеоаналитика" in selected_modules:
-    with st.sidebar.expander("📷 Модуль: Видеоаналитика", expanded=False):
+    with st.sidebar.expander("Модуль: Видеоаналитика", expanded=False):
         st.session_state["v_cap"] = st.number_input(f"Оборудование на 1 ТС ({curr_symbol})", value=int(st.session_state["v_cap"]), step=5000)
         st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
         v_eff = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 55, step=5) / 100
         
         v_dir = (total_direct_accident_damage_before / 12) * v_eff
         v_tco = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * v_eff
-        modules_payload["Видеоаналитика"] = {"capex": st.session_state["v_cap"] * total_fleet_size, "opex": st.session_state["v_op"] * total_fleet_size, "direct": v_dir, "tco": v_tco}
+        modules_payload["Видеоаналитика"] = {
+            "capex": st.session_state["v_cap"] * total_fleet_size, 
+            "opex": st.session_state["v_op"] * total_fleet_size, 
+            "direct": v_dir, 
+            "tco": v_tco
+        }
         savings_by_cat["acc_direct"] += v_dir
         savings_by_cat["acc_tco"] += v_tco
 
 # --- БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
 if "Безопасное вождение" in selected_modules:
-    with st.sidebar.expander("🛡️ Модуль: Безопасное вождение", expanded=False):
+    with st.sidebar.expander("Модуль: Безопасное вождение", expanded=False):
         st.session_state["sd_cap"] = st.number_input(f"Стоимость модуля на 1 ТС ({curr_symbol})", value=int(st.session_state["sd_cap"]), step=1000)
         st.session_state["sd_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["sd_op"]), step=50)
-        sd_eff_to = st.slider("Доп. экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
-        sd_eff_acc = st.slider("Доп. снижение ДТП от скоринга (%)", 0, 40, 15, step=5) / 100
         
-        sd_dir = (total_maint_before * sd_eff_to) + ((total_direct_accident_damage_before / 12) * sd_eff_acc)
-        sd_tco = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * sd_eff_acc
-        modules_payload["Безопасное вождение"] = {"capex": st.session_state["sd_cap"] * total_fleet_size, "opex": st.session_state["sd_op"] * total_fleet_size, "direct": sd_dir, "tco": sd_tco}
-        savings_by_cat["maint"] += total_maint_before * sd_eff_to
-        savings_by_cat["acc_direct"] += (total_direct_accident_damage_before / 12) * sd_eff_acc
-        savings_by_cat["acc_tco"] += sd_tco
+        # Значения по подтвержденному кейсу внедрения FMCG (сокращение ДТП в 4 раза, ГСМ -10%)
+        sd_eff_acc = st.slider("Снижение аварийности от скоринга (%)", 0, 100, 75, step=5) / 100
+        sd_eff_fuel = st.slider("Снижение расхода топлива от стиля езды (%)", 0.0, 25.0, 10.0, step=0.5) / 100
+        sd_eff_to = st.slider("Экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
+        
+        sd_fuel_saving = total_fuel_before * sd_eff_fuel
+        sd_maint_saving = total_maint_before * sd_eff_to
+        sd_acc_dir_saving = (total_direct_accident_damage_before / 12) * sd_eff_acc
+        sd_acc_tco_saving = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * sd_eff_acc
+        
+        modules_payload["Безопасное вождение"] = {
+            "capex": st.session_state["sd_cap"] * total_fleet_size, 
+            "opex": st.session_state["sd_op"] * total_fleet_size, 
+            "direct": sd_fuel_saving + sd_maint_saving + sd_acc_dir_saving, 
+            "tco": sd_acc_tco_saving
+        }
+        savings_by_cat["fuel"] += sd_fuel_saving
+        savings_by_cat["maint"] += sd_maint_saving
+        savings_by_cat["acc_direct"] += sd_acc_dir_saving
+        savings_by_cat["acc_tco"] += sd_acc_tco_saving
 
 # --- КОНТРОЛЬ ТОПЛИВА ---
 if "Контроль топлива" in selected_modules:
-    with st.sidebar.expander("⛽ Модуль: Контроль топлива", expanded=False):
+    with st.sidebar.expander("Модуль: Контроль топлива", expanded=False):
         st.session_state["f_cap"] = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(st.session_state["f_cap"]), step=2000)
         st.session_state["f_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["f_op"]), step=50)
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, 10.0, step=0.5) / 100
         
-        modules_payload["Контроль топлива"] = {"capex": st.session_state["f_cap"] * total_fleet_size, "opex": st.session_state["f_op"] * total_fleet_size, "direct": total_fuel_before * f_eff, "tco": 0}
+        modules_payload["Контроль топлива"] = {
+            "capex": st.session_state["f_cap"] * total_fleet_size, 
+            "opex": st.session_state["f_op"] * total_fleet_size, 
+            "direct": total_fuel_before * f_eff, 
+            "tco": 0
+        }
         savings_by_cat["fuel"] += total_fuel_before * f_eff
 
 # ==========================================
-# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК (СТАБИЛЬНАЯ ВЕРСИЯ С ДЛИННЫМ ФОРМАТОМ)
+# 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК
 # ==========================================
-st.title("SKAI Платформа: калькулятор TCO и ROI")
+st.title("Платформа SKAI: Расширенный калькулятор TCO и ROI")
 
 fleet_str = " + ".join([f"**{qty}** {name.split(' (')[0]}" for name, qty in fleet_quantities.items()])
 st.markdown(f"Структура парка: {fleet_str} | Всего: **{total_fleet_size} ТС**")
 st.markdown("---")
 
-calc_mode = st.radio("Аналитическая модель расчета:", ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь, лизинга и оптимизации ФОТ)"], horizontal=True)
+calc_mode = st.radio("Аналитическая модель расчета:", ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь и оптимизации ФОТ)"], horizontal=True)
 is_tco = "Полный TCO" in calc_mode
 mode_title = "полного TCO расчета" if is_tco else "прямого эффекта"
 
@@ -331,8 +353,6 @@ tco_table_data = [
     ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
     ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"]
 ]
-if lease_share > 0:
-    tco_table_data.append([f"Риски выплат лизинговой (износ/возврат за {lease_share}% парка)", fmt(total_lease_risk_before), fmt(savings_by_cat["lease"] if is_tco else 0), "Косвенный (TCO)"])
 
 df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", f"Базовые затраты до внедрения ({curr_symbol}/мес)", f"Прогноз экономии от SKAI ({curr_symbol}/мес)", "Тип фактора"])
 st.dataframe(df_tco, use_container_width=True, hide_index=True)
@@ -341,7 +361,6 @@ st.markdown("---")
 
 st.subheader(f"Динамика окупаемости и чистый эффект по продуктам ({mode_title})")
 
-# Включаем Месяц 0 в массив для явного отображения стартовых инвестиций
 months = np.arange(0, 37)
 chart_rows = []
 total_savings_by_module = {}
@@ -349,13 +368,11 @@ total_savings_by_module = {}
 for m in months:
     for module_name, metrics in modules_payload.items():
         if m == 0:
-            # В Месяц 0 финансовый эффект строго равен величине CAPEX со знаком минус
             accumulated_net_effect = -metrics["capex"]
         else:
             m_saving = metrics["direct"] + (metrics["tco"] if is_tco else 0)
             accumulated_net_effect = (m_saving - metrics["opex"]) * m - metrics["capex"]
         
-        # Формируем плоскую структуру таблицы (строка под каждую точку)
         chart_rows.append({
             "Месяц": m,
             "Продукт": module_name,
@@ -369,7 +386,6 @@ df_chart = pd.DataFrame(chart_rows)
 
 chart_col1, chart_col2 = st.columns([2, 1])
 with chart_col1:
-    # Отрисовка длинного формата через явное указание столбца color
     fig_line = px.line(
         df_chart, 
         x="Месяц", 
@@ -377,10 +393,7 @@ with chart_col1:
         color="Продукт", 
         color_discrete_sequence=px.colors.qualitative.Safe
     )
-    
-    # Красный пунктир окупаемости на уровне 0
     fig_line.add_hline(y=0, line_dash="dash", line_color="#FF4B4B", annotation_text="Точка окупаемости", annotation_position="bottom right")
-    
     fig_line.update_layout(
         margin=dict(l=10, r=10, t=10, b=10), 
         xaxis_title="Месяц", 
@@ -390,13 +403,12 @@ with chart_col1:
     st.plotly_chart(fig_line, use_container_width=True)
     
 with chart_col2:
-    # Защитный блок: строим круговую диаграмму только если есть положительная ценность
     if sum(total_savings_by_module.values()) > 0:
-        df_pie = pd.DataFrame([{"Проdukt": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
+        df_pie = pd.DataFrame([{"Продукт": k, "Чистая ценность (36 мес)": v} for k, v in total_savings_by_module.items()])
         fig_pie = px.pie(
             df_pie, 
             values="Чистая ценность (36 мес)", 
-            names="Проdukt", 
+            names="Продукт", 
             hole=0.4, 
             color_discrete_sequence=px.colors.qualitative.Safe
         )
@@ -432,7 +444,6 @@ for m in months:
 
 df_payback = pd.DataFrame(payback_rows)
 
-# Жесткое форматирование через lambda гарантирует разделители-пробелы
 styled_payback = df_payback.style.format({
     col_month: lambda x: f"{int(x)}",
     col_costs: lambda x: f"{int(x):,}".replace(",", " "),
@@ -480,10 +491,10 @@ html_table = styled_payback.to_html(classes="styled-table")
 st.markdown(f"{custom_css}<div class='table-container'>{html_table}</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 8. МЕТОДОЛОГИЯ И МАТЕМАТИЧЕСКИЙ АППАРАТ РАСЧЕТА (ИСПРАВЛЕННЫЙ RAW-STRING)
+# 8. МЕТОДОЛОГИЯ И МАТЕМАТИЧЕСКИЙ АППАРАТ РАСЧЕТА
 # ==========================================
 st.markdown("---")
-with st.expander("📝 Методология и математический аппарат расчетов", expanded=False):
+with st.expander("Методология и математический аппарат расчетов", expanded=False):
     st.markdown(r"""
     ### 1. Расчет базовых ежемесячных затрат автопарка (до внедрения SKAI)
     
@@ -499,18 +510,15 @@ with st.expander("📝 Методология и математический а
         $$Потери_{простой} = \frac{\text{Кол-во ДТП в год} \times \left( Дней_{простоя} \times (Стоимость_{водителя/день} + Доход_{ТС/день}) + Часы_{менеджера} \times Ставка_{менеджера} \right)}{12}$$
         
     * **Администрирование и оплата штрафов:** $$Потери_{штрафы} = \frac{\text{Штрафов на ТС в год} \times \left( Цена_{штрафа} + Время_{оформления} \times Ставка_{менеджера} \right)}{12} \times Всего_{ТС}$$
-        
-    * **Риски выплат лизинговым компаниям:** Определяют скрытые издержки при возврате ТС из-за ненормативного износа:  
-        $$Риски_{лизинг} = \frac{\text{Выплата при возврате}}{\text{Срок лизинга (мес)}} \times Всего_{ТС} \times \text{Доля лизинга (\%)} $$
 
     ### 2. Принцип формирования финансового эффекта модулей
     
-    Каждый подключенный продукт платформы SKAI выступает как мультипликатор снижения базовых издержек на определенный процент эффективности (значения регулируются ползунками):
+    Каждый подключенный продукт платформы SKAI выступает как мультипликатор снижения базовых издержек на определенный процент эффективности:
     
-    1.  **Базовый Мониторинг:** Оптимизирует пробеги (ГСМ), снижает износ (ТО), штрафы, риски лизинга и ДТП за счет контроля геозон.
+    1.  **Базовый Мониторинг:** Оптимизирует пробеги (ГСМ), снижает холостой ход, нецелевые простои, износ (ТО), штрафы и риски ДТП за счет контроля геозон.
     2.  **Контроль топлива:** Напрямую пресекает сливы и махинации с топливными картами.
     3.  **Видеоаналитика:** Снижает частоту критических инцидентов и ДТП (прямой ущерб + простой TCO) за счет контроля состояния водителя (усталость, телефон, ремень).
-    4.  **Безопасное вождение:** Дает дополнительное снижение износа (ТО) и вероятности аварий за счет индивидуального скоринга водителей.
+    4.  **Безопасное вождение:** Снижает аварийность за счет скоринга водителей, экономит ресурс агрегатов (ТО) и оптимизирует расход топлива за счет бережной езды.
     5.  **Сервис аналитики и реагирования:** Оптимизирует бэк-офис, позволяя сократить ФОТ собственного диспетчерского центра.
 
     ### 3. Расчет ключевых инвестиционных показателей проекта
@@ -528,4 +536,51 @@ with st.expander("📝 Методология и математический а
         
     * **Срок окупаемости проекта (Payback Period):** Период времени, за который чистый экономический эффект полностью покрывает первоначальные инвестиции:  
         $$Срок_{окупаемости} = \frac{\text{Капитальные вложения (Стартовые инвестиции)}}{\text{Чистая экономия в месяц}}$$
+    """)
+
+# ==========================================
+# 9. ОБОСНОВАНИЕ ПОКАЗАТЕЛЕЙ ДЛЯ РАСЧЕТА
+# ==========================================
+st.markdown("---")
+with st.expander("Обоснование показателей эффективности и источники данных", expanded=False):
+    st.markdown("""
+    ### Базовый мониторинг
+    * **Сокращение пробега и ГСМ (%):**
+        * **Источник:** Методология внедрения SKAI при максимальном сценарии использования (подключение CAN-шины и аналитического отчета «Поездки водителей»)[cite: 2]. Для неоснащенных парков экономия достигает 15–22% за счет полного исключения нецелевых рейсов, приписок и оптимизации холостого хода[cite: 2]. Для парков с уже установленным сторонним GPS максимальный эффект составляет 7–10% за счет исключения завышений одометра и перевода контроля на телематическую платформу SKAI[cite: 2].
+        * **Влияние на расчет:** Мультипликатор применяется напрямую к ежемесячной статье «Затраты на ГСМ (Топливо)».
+    * **Сокращение износа и ТО (%):**
+        * **Источник:** Методология внедрения SKAI[cite: 2]. Ликвидация перепробегов и снижения моточасов холостого хода отодвигает межсервисные интервалы. Максимальный эффект составляет 4–6% для новых парков и 3–4% для парков с существующим GPS[cite: 2].
+        * **Влияние на расчет:** Снижает статью «Затраты на ТО и расходники».
+    * **Сокращение штрафов (%):**
+        * **Источник:** Статистика диспетчеризации SKAI. Контроль скоростного порога ТС и уведомления диспетчерам снижают объемы дорожных штрафов на 30–60%.
+        * **Влияние на расчет:** Сокращает объем прямых штрафов и трудозатраты бэк-офиса на их администрирование в TCO-модели.
+    * **Сокращение ДТП (геозоны) (%):**
+        * **Источник:** Отраслевая аналитика телематических систем. Контроль опасных участков, съездов и скоростных лимитов в геозонах предотвращает 10–15% инцидентов.
+        * **Влияние на расчет:** Снижает пропорционально прямой ущерб от ДТП и скрытые TCO-потери от простоя ТС.
+
+    ### Сервис реагирования и аналитики
+    * **Сокращение затрат на ФОТ диспетчеров (%):**
+        * **Источник:** Статистика диспетчерского центра SKAI. Аутсорсинг первичного мониторинга, автоматическая эскалация критических событий и интеграции позволяют оптимизировать штат собственных операторов парка на 60%.
+        * **Влияние на расчет:** Снижает TCO-статью «Расходы на собственный штат диспетчеров (ФОТ)».
+
+    ### Видеоаналитика
+    * **Снижение аварийности со SKAI (%):**
+        * **Источник:** Статистика проектов видеоаналитики SKAI (алгоритмы ADAS/DMS). Контроль засыпания, отвлечения на смартфон и соблюдения дистанции предотвращает 50–60% тяжелых инцидентов.
+        * **Влияние на расчет:** Сокращает прямой ущерб от аварий и пропорционально уменьшает дни простоя ТС и водителей.
+
+    ### Безопасное вождение
+    * **Доп. снижение ДТП от скоринга (%):**
+        * **Источник:** Подтвержденный кейс внедрения SKAI в FMCG-холдинге (автопарк более 6 000 ТС, 6 стран СНГ). За счет перехода 98,8% водителей в зеленую зону скоринга общее число ДТП на 1 млн км сократилось в 4 раза (снижение на 75%), а ДТП с пострадавшими — в 12 раз.
+        * **Влияние на расчет:** Уменьшает аварийность автопарка по прямому ущербу и сопутствующим простоям в TCO.
+    * **Снижение расхода топлива от стиля езды (%):**
+        * **Источник:** Кейс внедрения SKAI в FMCG-холдинге (>6 000 ТС). Исключение резких разгонов, торможений и поддержание оптимального режима оборотов двигателя снизило средний расход топлива парка на 10%.
+        * **Влияние на расчет:** Увеличивает суммарный процент экономии топлива по статье «Затраты на ГСМ».
+    * **Доп. экономия на ТО от бережной езды (%):**
+        * **Источник:** Эксплуатационная статистика SKAI. Снижение динамических ударных нагрузок продлевает ресурс тормозных колодок, резины и подвески на 15–20%.
+        * **Влияние на расчет:** Снижает расходы по статье «Затраты на ТО и расходники».
+
+    ### Контроль топлива
+    * **Прямая экономия ГСМ (сливы/карты) (%):**
+        * **Источник:** Статистика внедрений высокоточных цифровых датчиков уровня топлива (ДУТ) и сверок с транзакциями топливных карт. Ликвидирует физические сливы и махинации с чеками на 8–12%.
+        * **Влияние на расчет:** Напрямую уменьшает статью ежемесячных базовых затрат на ГСМ независимо от пробега.
     """)
