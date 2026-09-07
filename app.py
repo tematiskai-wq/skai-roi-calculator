@@ -47,31 +47,31 @@ for name in presets.keys():
 # ==========================================
 # 2. ИНИЦИАЛИЗАЦИЯ И КОНВЕРТАЦИЯ СОСТОЯНИЯ (SESSION STATE)
 # ==========================================
-if "initialized" not in st.session_state:
-    st.session_state["initialized"] = True
-    st.session_state["prev_currency"] = "₽ (RUB)"
-    st.session_state["fuel_price"] = 65.0
-    st.session_state["emp_salary"] = 100000
-    st.session_state["emp_revenue"] = 1200000
-    st.session_state["disp_salary"] = 80000
-    st.session_state["manager_hourly_rate"] = 500
-    st.session_state["fine_avg_cost"] = 500
-    st.session_state["s_cap"] = 40000
-    st.session_state["s_op"] = 900
-    
-    for name, p_default in presets.items():
-        st.session_state[f"maint_{name}"] = p_default["maintenance"]
-        st.session_state[f"acost_{name}"] = p_default["accident_cost"]
-        st.session_state[f"ins_{name}"] = p_default["insurance_cost"]
-        
-    st.session_state["b_cap"] = 15000
-    st.session_state["b_op"] = 400
-    st.session_state["v_cap"] = 120000
-    st.session_state["v_op"] = 2000
-    st.session_state["sd_cap"] = 10000
-    st.session_state["sd_op"] = 500
-    st.session_state["f_cap"] = 25000
-    st.session_state["f_op"] = 600
+# Безопасная инициализация: ключи создаются, только если их еще нет в текущей сессии
+st.session_state.setdefault("initialized", True)
+st.session_state.setdefault("prev_currency", "₽ (RUB)")
+st.session_state.setdefault("fuel_price", 65.0)
+st.session_state.setdefault("emp_salary", 100000)
+st.session_state.setdefault("emp_revenue", 1200000)
+st.session_state.setdefault("disp_salary", 80000)
+st.session_state.setdefault("manager_hourly_rate", 500)
+st.session_state.setdefault("fine_avg_cost", 500)
+st.session_state.setdefault("s_cap", 40000)
+st.session_state.setdefault("s_op", 900)
+
+for name, p_default in presets.items():
+    st.session_state.setdefault(f"maint_{name}", p_default["maintenance"])
+    st.session_state.setdefault(f"acost_{name}", p_default["accident_cost"])
+    st.session_state.setdefault(f"ins_{name}", p_default["insurance_cost"])
+
+st.session_state.setdefault("b_cap", 15000)
+st.session_state.setdefault("b_op", 400)
+st.session_state.setdefault("v_cap", 120000)
+st.session_state.setdefault("v_op", 2000)
+st.session_state.setdefault("sd_cap", 10000)
+st.session_state.setdefault("sd_op", 500)
+st.session_state.setdefault("f_cap", 25000)
+st.session_state.setdefault("f_op", 600)
 
 def fmt(val):
     return f"{val:,.0f}".replace(",", " ")
