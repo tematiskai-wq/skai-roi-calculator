@@ -2,11 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import base64
 
 # Настройка страницы в строгом B2B стиле
 st.set_page_config(page_title="Платформа SKAI: Калькулятор TCO и ROI", layout="wide")
 
-# Фирменный SVG логотип SKAI
+# ==========================================
+# ФИРМЕННЫЙ SVG ЛОГОТИП SKAI И НАСТРОЙКА ST.LOGO
+# ==========================================
 SKAI_LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 570 190" width="100%" height="100%">
 <rect width="570" height="190" rx="28" fill="#166EFF"/>
 <g transform="translate(53.15, 41.65)" fill="#FFFFFF">
@@ -31,6 +34,9 @@ c13.55,28.8,27.05,57.63,40.55,86.45h-15.35l-8.96-19.69h-43.18l-8.86,19.69h-15.37
 l-14.09,14.74v23.45h-14.38V10.12h14.38v43.77l41.8-43.77h18.89l-36.8,38.28l40.13,48.17h-18.3L266.45,58.48L266.45,58.48z"/>
 </g>
 </svg>"""
+
+logo_b64 = base64.b64encode(SKAI_LOGO_SVG.encode("utf-8")).decode("utf-8")
+st.logo(f"data:image/svg+xml;base64,{logo_b64}")
 
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ (БАЗОВЫЕ ЗНАЧЕНИЯ В РУБЛЯХ)
@@ -103,28 +109,6 @@ def fmt(val):
 # ==========================================
 # 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
-# Полноширинный фиксированный хедер сайдбара (не пропускает контент сквозь себя)
-sidebar_logo_html = f"""<style>
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
-    position: sticky;
-    top: 0;
-    z-index: 9999;
-    background-color: var(--secondary-background-color, #f0f2f6);
-    /* Растягиваем плашку от края до края сайдбара */
-    margin-left: -1rem;
-    margin-right: -1rem;
-    margin-top: -1.5rem;
-    padding: 1.2rem 1rem 0.8rem 1rem;
-    width: calc(100% + 2rem);
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-}}
-</style>
-<div style="width: 140px; line-height: 0;">
-{SKAI_LOGO_SVG}
-</div>"""
-st.sidebar.markdown(sidebar_logo_html, unsafe_allow_html=True)
-
 st.sidebar.header("Параметры и конфигурация")
 
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
