@@ -103,28 +103,22 @@ def fmt(val):
 # ==========================================
 # 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
-# Закрепленный вверху сайдбара логотип
-st.sidebar.markdown(
-    f"""
-    <style>
-        /* Фиксация первого блока (логотипа) вверху сайдбара */
-        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
-            position: sticky;
-            top: 0;
-            z-index: 9999;
-            background: var(--secondary-background-color, #f0f2f6);
-            padding-top: 0.8rem;
-            padding-bottom: 0.8rem;
-            margin-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        }}
-    </style>
-    <div style="width: 140px; margin: 0 auto 0 0;">
-        {SKAI_LOGO_SVG}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# Закрепленный вверху сайдбара логотип (без отступов Markdown)
+sidebar_logo_html = f"""<style>
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    background: var(--secondary-background-color, #f0f2f6);
+    padding: 0.8rem 0;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}}
+</style>
+<div style="width: 140px; margin: 0 auto 0 0;">
+{SKAI_LOGO_SVG}
+</div>"""
+st.sidebar.markdown(sidebar_logo_html, unsafe_allow_html=True)
 
 st.sidebar.header("Параметры и конфигурация")
 
