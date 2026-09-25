@@ -380,9 +380,12 @@ for m_name, m_data in modules_raw.items():
 # ==========================================
 st.title("Платформа SKAI: Калькулятор TCO и ROI")
 
+# ==========================================
+# ВИЗУАЛЬНЫЙ БЛОК СТРУКТУРЫ АВТОПАРКА И ПРОФИЛЕЙ РИСКА
+# ==========================================
 bar_colors = ["#2563EB", "#0EA5E9", "#64748B", "#F59E0B"]
 
-# 1. Тонкая шкала распределения
+# 1. Тонкая сегментированная шкала распределения
 distribution_bar_html = "<div style='display: flex; height: 6px; width: 100%; border-radius: 3px; overflow: hidden; background-color: #E2E8F0; margin: 12px 0 16px 0;'>"
 for idx, (name, cp) in enumerate(custom_fleet_params.items()):
     qty = cp["qty"]
@@ -392,8 +395,15 @@ for idx, (name, cp) in enumerate(custom_fleet_params.items()):
         distribution_bar_html += f"<div style='width: {share}%; background-color: {color};' title='{name}: {share:.1f}%'></div>"
 distribution_bar_html += "</div>"
 
+# Профили риска для каждого типа ТС без учета ТО и запчастей
+risk_profiles = {
+    "Магистральный тягач (Фура)": "Трассовые ДТП (сон/дистанция), непроизводительный ХХ на стоянках",
+    "Самосвал / Тяжелая спецтехника": "Холостой ход на погрузке, маневрирование в ограниченном пространстве",
+    "Легкий коммерческий транспорт / Корпоративные авто": "Плотный городской трафик, превышение скорости, отвлечение на телефон"
+}
+
 # 2. Карточки автопарка
-cards_html = f"""<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;">
+cards_html = f"""<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;">
 <div style="flex: 1 1 180px; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 14px 18px;">
 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 4px;">Общий объем парка</div>
 <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.1;">{total_fleet_size} <span style="font-size: 14px; font-weight: 500; color: #64748B;">ТС</span></div>
@@ -405,19 +415,60 @@ for idx, (name, cp) in enumerate(custom_fleet_params.items()):
     qty = cp["qty"]
     share = (qty / total_fleet_size * 100) if total_fleet_size > 0 else 0
     color = bar_colors[idx % len(bar_colors)]
+    group_mileage = cp["mileage"] * qty
+    profile_text = risk_profiles.get(name, "Операционные риски эксплуатации")
     
-    cards_html += f"""<div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+    cards_html += f"""<div style="flex: 1 1 230px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
 <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {color};"></div>
 <div style="font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{clean_name}">{clean_name}</div>
 </div>
-<div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.1;">{qty} <span style="font-size: 14px; font-weight: 500; color: #64748B;">ТС</span></div>
-<div style="font-size: 12px; font-weight: 600; color: {color}; margin-top: 6px;">{share:.1f}% от парка</div>
+<div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.1;">{qty} <span style="font-size: 14px; font-weight: 500; color: #64748B;">ТС</span> <span style="font-size: 13px; font-weight: 600; color: {color};">({share:.1f}%)</span></div>
+<div style="font-size: 12px; color: #64748B; margin-top: 4px;">Пробег группы: {fmt(group_mileage)} км/год</div>
+<div style="font-size: 11px; color: #94A3B8; margin-top: 6px; line-height: 1.3;">Фокус: {profile_text}</div>
 </div>"""
 
 cards_html += "</div>"
-
 st.markdown(distribution_bar_html + cards_html, unsafe_allow_html=True)
+
+# ==========================================
+# ДИНАМИЧЕСКИЙ АНАЛИЗ СКРЫТЫХ ПОТЕРЬ (ОТРАСЛЕВЫЕ БЕНЧМАРКИ)
+# ==========================================
+# Расчет потерь по парку клиента
+annual_direct_accidents = total_direct_accident_damage_before
+annual_iceberg_hidden = annual_direct_accidents * 3.0  # Коэффициент 1:3 по международным нормам NETS
+annual_fuel_total = total_fuel_before * 12
+annual_waste_fuel = annual_fuel_total * 0.12  # 12% перерасхода на ХХ и отклонения
+annual_downtime_days = total_accidents_year * downtime_days
+annual_downtime_cost = annual_downtime_days * (downtime_daily_loss + employee_daily_cost)
+
+st.markdown(
+    f"""
+    <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #2563EB; border-radius: 6px; padding: 14px 18px; margin-bottom: 24px;">
+        <div style="font-size: 13px; font-weight: 700; color: #1E293B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+            Оценка зоны потенциальных потерь парка до внедрения платформы SKAI
+        </div>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1 1 260px;">
+                <div style="font-size: 12px; color: #64748B;">Скрытые потери от ДТП (Правило айсберга 1:3)</div>
+                <div style="font-size: 20px; font-weight: 700; color: #DC2626;">~{fmt(annual_iceberg_hidden)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Косвенный ущерб: срыв поставок, субподряд, разбор инцидентов</div>
+            </div>
+            <div style="flex: 1 1 260px;">
+                <div style="font-size: 12px; color: #64748B;">Балласт по ГСМ (Холостой ход и маршруты)</div>
+                <div style="font-size: 20px; font-weight: 700; color: #D97706;">~{fmt(annual_waste_fuel)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">10–14% топлива уходит на неоправданный ХХ и съезды с линии</div>
+            </div>
+            <div style="flex: 1 1 260px;">
+                <div style="font-size: 12px; color: #64748B;">Потери от простоя техники в ремонте</div>
+                <div style="font-size: 20px; font-weight: 700; color: #475569;">~{fmt(annual_downtime_cost)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Суммарно {int(annual_downtime_days)} дней простоя ТС при {total_accidents_year:.0f} ДТП в год</div>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.markdown("---")
 
 calc_mode = st.radio("Аналитическая модель расчета:", ["Прямой экономический эффект (Классический)", "Полный TCO расчет (С учетом скрытых потерь и оптимизации ФОТ)"], horizontal=True)
