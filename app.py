@@ -109,19 +109,29 @@ default_qtys = {
 }
 
 for name, p_default in presets.items():
-    qty = st.sidebar.number_input(f"{name} (шт):", min_value=0, value=default_qtys[name], step=5)
+    qty = st.sidebar.number_input(f"{name} (шт):", min_value=0, value=default_qtys[name], step=5, key=f"qty_input_{name}")
     
     if qty > 0:
         fleet_quantities[name] = qty
-        default_accidents = p_default["accidents_year"] * (qty / p_default["fleet_size"])
         clean_name = name.split(" (")[0]
+        
+        # Динамический пересчет частоты ДТП при изменении количества машин в группе
+        prev_qty_key = f"prev_qty_{name}"
+        acc_key = f"acc_{name}"
+        
+        if prev_qty_key not in st.session_state:
+            st.session_state[prev_qty_key] = qty
+            st.session_state[acc_key] = float(round(p_default["accidents_year"] * (qty / p_default["fleet_size"]), 1))
+        elif st.session_state[prev_qty_key] != qty:
+            st.session_state[acc_key] = float(round(p_default["accidents_year"] * (qty / p_default["fleet_size"]), 1))
+            st.session_state[prev_qty_key] = qty
         
         with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
             
             st.session_state[f"maint_{name}"] = st.number_input(f"ТО + расходники 1 ТС/год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000)
-            accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, value=float(default_accidents), step=0.5, key=f"acc_{name}")
+            accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, step=0.5, key=acc_key)
             st.session_state[f"acost_{name}"] = st.number_input(f"Ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=50000)
             st.session_state[f"ins_{name}"] = st.number_input(f"КАСКО и ОСАГО на 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"ins_{name}"]), step=5000)
         
@@ -139,7 +149,7 @@ if total_fleet_size == 0:
     st.stop()
 
 # ==========================================
-# 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO, ПЕРСОНАЛОМ И СТРАХОВАНИЕМ (ВАРИАНТ А)
+# 4. СЕКЦИЯ САЙДБАРА: УПРАВЛЕНИЕ TCO, ПЕРСОНАЛОМ И СТРАХОВАНИЕМ
 # ==========================================
 st.sidebar.markdown("---")
 st.sidebar.subheader("Управление TCO и персоналом")
@@ -152,25 +162,24 @@ with st.sidebar.expander("Потери бэк-офиса и простои пе�
         value=int(st.session_state["downtime_loss_per_day"]), 
         step=1000
     )
-    st.caption("Расшифровка: упущенная чистая прибыль/маржа от сорванного рейса или затраты на аренду подменного автомобиля за одни сутки.")
+    st.caption("Расшифровка: упущенная чистая прибыль (маржа) от сорванного рейса или затраты на аренду подменного автомобиля за одни сутки.")
 
     st.markdown("**Диспетчеризация и администрирование**")
     st.session_state["disp_salary"] = st.number_input(f"ФОТ 1 диспетчера парка в месяц ({curr_symbol})", value=int(st.session_state["disp_salary"]), step=5000)
     calculated_disp_qty = max(1.0, round(total_fleet_size / 25, 1))
     disp_qty = st.number_input("Текущее кол-во диспетчеров в штате (база)", value=float(calculated_disp_qty), step=0.5)
     
-    # Автоматический расчет ставки часа работы специалиста бэк-офиса (168 рабочих часов в месяц)
     manager_hourly_rate = round(st.session_state["disp_salary"] / 168)
     st.caption(f"Себестоимость часа работы бэк-офиса: {manager_hourly_rate} {curr_symbol}/час (рассчитано автоматически: ФОТ / 168 ч).")
     
     st.markdown("**Издержки при инцидентах**")
     downtime_days = st.number_input("Средний простой ТС после ДТП (дней)", value=14, step=1)
-    time_manager_accident = 8  # 8 часов на взаимодействие со страховой, ГИБДД, экспертами
+    time_manager_accident = 8
     
     st.markdown("**Штрафы автопарка**")
     fines_per_car_year = st.number_input("Кол-во штрафов на 1 ТС в год (база)", value=12, step=2)
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
-    time_manager_fine = 0.5  # 30 минут на проверку фотофиксации и проведение платежа
+    time_manager_fine = 0.5
 
 with st.sidebar.expander("Страхование автопарка (КАСКО и ОСАГО)", expanded=False):
     st.caption("Скидка при пролонгации активируется при оснащении комплексами Видеоаналитики SKAI")
@@ -181,7 +190,6 @@ employee_daily_cost = st.session_state["emp_salary"] / working_days_month
 downtime_daily_loss = st.session_state["downtime_loss_per_day"]
 
 def get_total_accident_cost(direct_cost):
-    # Прямой ущерб + (оклад простаивающего водителя + упущенная прибыль авто в день) * дни простоя + труд бэк-офиса
     downtime_loss = downtime_days * (employee_daily_cost + downtime_daily_loss)
     management_loss = time_manager_accident * manager_hourly_rate
     return direct_cost + downtime_loss + management_loss
@@ -380,9 +388,6 @@ for m_name, m_data in modules_raw.items():
 # ==========================================
 st.title("Платформа SKAI: Калькулятор TCO и ROI")
 
-# ==========================================
-# ВИЗУАЛЬНЫЙ БЛОК СТРУКТУРЫ АВТОПАРКА И ПРОФИЛЕЙ РИСКА
-# ==========================================
 bar_colors = ["#2563EB", "#0EA5E9", "#64748B", "#F59E0B"]
 
 # 1. Тонкая сегментированная шкала распределения
@@ -395,7 +400,6 @@ for idx, (name, cp) in enumerate(custom_fleet_params.items()):
         distribution_bar_html += f"<div style='width: {share}%; background-color: {color};' title='{name}: {share:.1f}%'></div>"
 distribution_bar_html += "</div>"
 
-# Профили риска для каждого типа ТС без учета ТО и запчастей
 risk_profiles = {
     "Магистральный тягач (Фура)": "Трассовые ДТП (сон/дистанция), непроизводительный ХХ на стоянках",
     "Самосвал / Тяжелая спецтехника": "Холостой ход на погрузке, маневрирование в ограниченном пространстве",
@@ -432,37 +436,41 @@ cards_html += "</div>"
 st.markdown(distribution_bar_html + cards_html, unsafe_allow_html=True)
 
 # ==========================================
-# ДИНАМИЧЕСКИЙ АНАЛИЗ СКРЫТЫХ ПОТЕРЬ (ОТРАСЛЕВЫЕ БЕНЧМАРКИ)
+# ДИНАМИЧЕСКИЙ АНАЛИЗ ПОТЕРЬ (ПРЯМЫЕ + СКРЫТЫЕ)
 # ==========================================
-# Расчет потерь по парку клиента
 annual_direct_accidents = total_direct_accident_damage_before
-annual_iceberg_hidden = annual_direct_accidents * 3.0  # Коэффициент 1:3 по международным нормам NETS
+annual_iceberg_hidden = annual_direct_accidents * 3.0  # Правило 1:3 по международным нормам NETS
 annual_fuel_total = total_fuel_before * 12
-annual_waste_fuel = annual_fuel_total * 0.12  # 12% перерасхода на ХХ и отклонения
+annual_waste_fuel = annual_fuel_total * 0.12  # 12% перерасхода на ХХ и отклонения от маршрутов
 annual_downtime_days = total_accidents_year * downtime_days
 annual_downtime_cost = annual_downtime_days * (downtime_daily_loss + employee_daily_cost)
 
 st.markdown(
     f"""
     <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #2563EB; border-radius: 6px; padding: 14px 18px; margin-bottom: 24px;">
-        <div style="font-size: 13px; font-weight: 700; color: #1E293B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+        <div style="font-size: 13px; font-weight: 700; color: #1E293B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
             Оценка зоны потенциальных потерь парка до внедрения платформы SKAI
         </div>
-        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <div style="flex: 1 1 260px;">
-                <div style="font-size: 12px; color: #64748B;">Скрытые потери от ДТП (Правило айсберга 1:3)</div>
-                <div style="font-size: 20px; font-weight: 700; color: #DC2626;">~{fmt(annual_iceberg_hidden)} {curr_symbol}/год</div>
-                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Косвенный ущерб: срыв поставок, субподряд, разбор инцидентов</div>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEE2E2; border-radius: 6px; padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 600; color: #991B1B;">Прямой ущерб от ДТП</div>
+                <div style="font-size: 20px; font-weight: 700; color: #DC2626; margin: 2px 0;">~{fmt(annual_direct_accidents)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B;">Счета СТО, ремонт и франшизы при {total_accidents_year:.1f} ДТП</div>
             </div>
-            <div style="flex: 1 1 260px;">
-                <div style="font-size: 12px; color: #64748B;">Балласт по ГСМ (Холостой ход и маршруты)</div>
-                <div style="font-size: 20px; font-weight: 700; color: #D97706;">~{fmt(annual_waste_fuel)} {curr_symbol}/год</div>
-                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">10–14% топлива уходит на неоправданный ХХ и съезды с линии</div>
+            <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FFE4E6; border-radius: 6px; padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 600; color: #9F1239;">Скрытые потери от ДТП (1:3)</div>
+                <div style="font-size: 20px; font-weight: 700; color: #E11D48; margin: 2px 0;">~{fmt(annual_iceberg_hidden)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B;">Срыв контрактов, субподряд, разбор инцидентов</div>
             </div>
-            <div style="flex: 1 1 260px;">
-                <div style="font-size: 12px; color: #64748B;">Потери от простоя техники в ремонте</div>
-                <div style="font-size: 20px; font-weight: 700; color: #475569;">~{fmt(annual_downtime_cost)} {curr_symbol}/год</div>
-                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Суммарно {int(annual_downtime_days)} дней простоя ТС при {total_accidents_year:.0f} ДТП в год</div>
+            <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEF3C7; border-radius: 6px; padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 600; color: #92400E;">Балласт по ГСМ (ХХ и съезды)</div>
+                <div style="font-size: 20px; font-weight: 700; color: #D97706; margin: 2px 0;">~{fmt(annual_waste_fuel)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B;">10–14% топлива сжигается впустую на стоянках и приписках</div>
+            </div>
+            <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 600; color: #334155;">Потери от простоя техники</div>
+                <div style="font-size: 20px; font-weight: 700; color: #475569; margin: 2px 0;">~{fmt(annual_downtime_cost)} {curr_symbol}/год</div>
+                <div style="font-size: 11px; color: #64748B;">Суммарно {int(annual_downtime_days)} дней ожидания и кузовного ремонта</div>
             </div>
         </div>
     </div>
@@ -774,7 +782,7 @@ with st.expander("Обоснование показателей эффектив
         * **Источник:** Подтвержденный кейс внедрения SKAI в FMCG-холдинге (более 6 000 ТС). Переход 98,8% водителей в зеленую зону аккуратной езды сократил число любых ДТП на 1 млн км пробега в 4 раза (-75%).
         * **Влияние на расчет:** Формирует мультипликатор снижения аварийности совместно с Видеоаналитикой.
     * **Снижение расхода топлива от стиля езды (%):**
-        * **Источник:** Кейс внедрения FMCG (>6 000 ТС). Устранение резких ускорений, торможений и поддержание оптимальных оборотов двигателя снижает расход топлива на 10%.
+        * **Источник:** Кейс внедрения FMCG (>6 000 ТС). Устранение резких ускорений, торможений и поддержание оптимального режима оборотов двигателя снижает расход топлива на 10%.
         * **Влияние на расчет:** Дополнительно снижает статью затрат на ГСМ поверх эффекта исключения перепробегов.
     * **Экономия на ТО от бережной езды (%):**
         * **Источник:** Данные телематики SKAI. Плавное вождение продлевает ресурс тормозных колодок, резины и элементов подвески на 15–20%.
