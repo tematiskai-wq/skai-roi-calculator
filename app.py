@@ -38,6 +38,38 @@ l-14.09,14.74v23.45h-14.38V10.12h14.38v43.77l41.8-43.77h18.89l-36.8,38.28l40.13,
 logo_b64 = base64.b64encode(SKAI_LOGO_SVG.encode("utf-8")).decode("utf-8")
 st.logo(f"data:image/svg+xml;base64,{logo_b64}")
 
+# Закрепление шапки сайдбара и масштабирование логотипа SKAI
+st.markdown(
+    """
+    <style>
+        /* 1. Делаем всю шапку сайдбара фиксированной (sticky) */
+        [data-testid="stSidebarHeader"] {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 999999 !important;
+            background-color: var(--secondary-background-color, #f0f2f6) !important;
+            padding-top: 1rem !important;
+            padding-bottom: 0.8rem !important;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03) !important;
+        }
+
+        /* 2. Увеличиваем высоту и пропорции логотипа */
+        [data-testid="stLogo"], 
+        [data-testid="stLogo"] img, 
+        img[data-testid="stLogo"] {
+            height: 48px !important;
+            max-height: 52px !important;
+            width: auto !important;
+            display: block !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ (БАЗОВЫЕ ЗНАЧЕНИЯ В РУБЛЯХ)
 # ==========================================
