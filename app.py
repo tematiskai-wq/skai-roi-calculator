@@ -103,18 +103,24 @@ def fmt(val):
 # ==========================================
 # 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
-# Закрепленный вверху сайдбара логотип (без отступов Markdown)
+# Полноширинный фиксированный хедер сайдбара (не пропускает контент сквозь себя)
 sidebar_logo_html = f"""<style>
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
     position: sticky;
     top: 0;
     z-index: 9999;
-    background: var(--secondary-background-color, #f0f2f6);
-    padding: 0.8rem 0;
-    margin-bottom: 0.5rem;
+    background-color: var(--secondary-background-color, #f0f2f6);
+    /* Растягиваем плашку от края до края сайдбара */
+    margin-left: -1rem;
+    margin-right: -1rem;
+    margin-top: -1.5rem;
+    padding: 1.2rem 1rem 0.8rem 1rem;
+    width: calc(100% + 2rem);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }}
 </style>
-<div style="width: 140px; margin: 0 auto 0 0;">
+<div style="width: 140px; line-height: 0;">
 {SKAI_LOGO_SVG}
 </div>"""
 st.sidebar.markdown(sidebar_logo_html, unsafe_allow_html=True)
