@@ -103,7 +103,29 @@ def fmt(val):
 # ==========================================
 # 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
-st.sidebar.markdown(f'<div style="width: 140px; margin-bottom: 20px;">{SKAI_LOGO_SVG}</div>', unsafe_allow_html=True)
+# Закрепленный вверху сайдбара логотип
+st.sidebar.markdown(
+    f"""
+    <style>
+        /* Фиксация первого блока (логотипа) вверху сайдбара */
+        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            background: var(--secondary-background-color, #f0f2f6);
+            padding-top: 0.8rem;
+            padding-bottom: 0.8rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }}
+    </style>
+    <div style="width: 140px; margin: 0 auto 0 0;">
+        {SKAI_LOGO_SVG}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.sidebar.header("Параметры и конфигурация")
 
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
@@ -413,11 +435,7 @@ for m_name, m_data in modules_raw.items():
 # ==========================================
 # 6. РЕНДЕРИНГ ИНТЕРФЕЙСА И РАСЧЕТ МЕТРИК
 # ==========================================
-header_html = f"""<div style="display: flex; align-items: center; gap: 18px; margin-bottom: 20px;">
-    <div style="width: 140px; flex-shrink: 0;">{SKAI_LOGO_SVG}</div>
-    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #0F172A; line-height: 1.2;">Платформа SKAI: Калькулятор TCO и ROI</h1>
-</div>"""
-st.markdown(header_html, unsafe_allow_html=True)
+st.title("Платформа SKAI: Калькулятор TCO и ROI")
 
 bar_colors = ["#2563EB", "#0EA5E9", "#64748B", "#F59E0B"]
 
