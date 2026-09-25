@@ -112,7 +112,6 @@ sidebar_logo_html = f"""<style>
     background: var(--secondary-background-color, #f0f2f6);
     padding: 0.8rem 0;
     margin-bottom: 0.5rem;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }}
 </style>
 <div style="width: 140px; margin: 0 auto 0 0;">
