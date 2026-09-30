@@ -150,15 +150,11 @@ def fmt(val):
 # ==========================================
 st.sidebar.header("Параметры и конфигурация")
 
-# ==========================================
-# ЭКСПОРТ И ИМПОРТ ПАРАМЕТРОВ АВТОПАРКА (JSON)
-# ==========================================
+# --- ЭКСПОРТ И ИМПОРТ ПАРАМЕТРОВ АВТОПАРКА (JSON) ---
 with st.sidebar.expander("Сохранение и загрузка параметров", expanded=False):
-    # --- 1. ЗАГРУЗКА ИЗ ФАЙЛА ---
     uploaded_config = st.file_uploader("Загрузить файл конфигурации (.json)", type=["json"], key="fleet_config_uploader")
     if uploaded_config is not None:
         file_bytes = uploaded_config.getvalue()
-        # Защита от бесконечного цикла перезагрузки страницы
         if st.session_state.get("last_loaded_config_hash") != hash(file_bytes):
             try:
                 config_json = json.loads(file_bytes.decode("utf-8"))
@@ -197,7 +193,7 @@ with st.sidebar.expander("Сохранение и загрузка параме�
             except Exception as e:
                 st.error(f"Ошибка при загрузке: {e}")
 
-    # --- 2. ВЫГРУЗКА В ФАЙЛ ---
+    # Выгрузка текущих параметров в файл
     export_payload = {
         "version": "1.0",
         "currency": st.session_state.get("prev_currency", "₽ (RUB)"),
@@ -230,6 +226,7 @@ with st.sidebar.expander("Сохранение и загрузка параме�
 
 st.sidebar.markdown("---")
 
+# --- ВЫБОР ВАЛЮТЫ И СТОИМОСТИ ТОПЛИВА ---
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
 is_kzt = "KZT" in currency_choice
 curr_symbol = "₸" if is_kzt else "₽"
@@ -244,7 +241,12 @@ if currency_choice != st.session_state["prev_currency"]:
                 st.session_state[k] = round(st.session_state[k] * factor)
     st.session_state["prev_currency"] = currency_choice
 
-st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
+st.session_state["fuel_price"] = st.sidebar.number_input(
+    f"Цена топлива ({curr_symbol}/литр)", 
+    min_value=1.0, 
+    value=float(st.session_state["fuel_price"]), 
+    step=1.0
+)
 fuel_price = st.session_state["fuel_price"]
 
 st.sidebar.markdown("---")
@@ -253,14 +255,14 @@ st.sidebar.subheader("Состав и параметры ТС")
 fleet_quantities = {}
 custom_fleet_params = {}
 
-default_qtys = {
-    "Магистральный тягач (Фура)": 30,
-    "Самосвал / Тяжелая спецтехника": 10,
-    "Легкий коммерческий транспорт / Корпоративные авто": 15
-}
-
 for name, p_default in presets.items():
-    qty = st.sidebar.number_input(f"{name} (шт):", min_value=0, value=default_qtys[name], step=5, key=f"qty_input_{name}")
+    qty = st.sidebar.number_input(
+        f"{name} (шт):", 
+        min_value=0, 
+        value=default_qtys[name], 
+        step=5, 
+        key=f"qty_input_{name}"
+    )
     
     if qty > 0:
         fleet_quantities[name] = qty
@@ -278,19 +280,61 @@ for name, p_default in presets.items():
             st.session_state[prev_qty_key] = qty
         
         with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
-            mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
-            consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
+            mileage = st.number_input(
+                "Пробег 1 ТС в год (км)", 
+                min_value=1000, 
+                value=p_default["mileage"], 
+                step=5000, 
+                key=f"mil_{name}"
+            )
+            consumption = st.number_input(
+                "Расход (л/100 км)", 
+                min_value=1.0, 
+                value=p_default["consumption"], 
+                step=0.5, 
+                key=f"cons_{name}"
+            )
+            maintenance = st.number_input(
+                f"ТО + расходники 1 ТС/год ({curr_symbol})", 
+                min_value=0, 
+                value=int(st.session_state[f"maint_{name}"]), 
+                step=5000, 
+                key=f"maint_{name}"
+            )
+            accidents = st.number_input(
+                "ДТП этой группы в год (шт)", 
+                min_value=0.0, 
+                step=0.5, 
+                key=acc_key
+            )
+            accident_cost = st.number_input(
+                f"Ущерб/франшиза 1 ДТП ({curr_symbol})", 
+                min_value=0, 
+                value=int(st.session_state[f"acost_{name}"]), 
+                step=50000, 
+                key=f"acost_{name}"
+            )
+            insurance_cost = st.number_input(
+                f"КАСКО и ОСАГО на 1 ТС в год ({curr_symbol})", 
+                min_value=0, 
+                value=int(st.session_state[f"ins_{name}"]), 
+                step=5000, 
+                key=f"ins_{name}"
+            )
             
-            st.session_state[f"maint_{name}"] = st.number_input(f"ТО + расходники 1 ТС/год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000)
-            accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, step=0.5, key=acc_key)
-            st.session_state[f"acost_{name}"] = st.number_input(f"Ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=50000)
-            st.session_state[f"ins_{name}"] = st.number_input(f"КАСКО и ОСАГО на 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"ins_{name}"]), step=5000)
+            # Актуализация значений в session_state
+            st.session_state[f"maint_{name}"] = maintenance
+            st.session_state[f"acost_{name}"] = accident_cost
+            st.session_state[f"ins_{name}"] = insurance_cost
         
         custom_fleet_params[name] = {
-            "qty": qty, "mileage": mileage, "consumption": consumption, 
-            "maintenance": st.session_state[f"maint_{name}"],
-            "accidents_year": accidents, "accident_cost": st.session_state[f"acost_{name}"],
-            "insurance_cost": st.session_state[f"ins_{name}"],
+            "qty": qty, 
+            "mileage": mileage, 
+            "consumption": consumption, 
+            "maintenance": maintenance,
+            "accidents_year": accidents, 
+            "accident_cost": accident_cost,
+            "insurance_cost": insurance_cost,
             **{k: v for k, v in p_default.items() if "eff" in k}
         }
 
