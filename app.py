@@ -321,11 +321,6 @@ for name, p_default in presets.items():
                 step=5000, 
                 key=f"ins_{name}"
             )
-            
-            # Актуализация значений в session_state
-            st.session_state[f"maint_{name}"] = maintenance
-            st.session_state[f"acost_{name}"] = accident_cost
-            st.session_state[f"ins_{name}"] = insurance_cost
         
         custom_fleet_params[name] = {
             "qty": qty, 
