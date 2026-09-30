@@ -119,7 +119,8 @@ for name in presets.keys():
 st.session_state.setdefault("initialized", True)
 st.session_state.setdefault("prev_currency", "₽ (RUB)")
 st.session_state.setdefault("fuel_price", 65.0)
-st.session_state.setdefault("stat_period_years", 2)
+
+# Числовые проценты хранятся как int (от 0 до 100) во избежание сброса в 0
 st.session_state.setdefault("driver_fault_pct", 70)
 st.session_state.setdefault("use_reserve_fleet", True)
 st.session_state.setdefault("reserve_fleet_qty", 10)
@@ -170,12 +171,16 @@ with st.sidebar.expander("Сохранение и загрузка параме�
                 # Глобальные параметры
                 if "currency" in config_json: st.session_state["prev_currency"] = config_json["currency"]
                 if "fuel_price" in config_json: st.session_state["fuel_price"] = float(config_json["fuel_price"])
-                if "stat_period_years" in config_json: st.session_state["stat_period_years"] = int(config_json["stat_period_years"])
-                if "driver_fault_pct" in config_json: st.session_state["driver_fault_pct"] = int(config_json["driver_fault_pct"])
+                
+                if "driver_fault_pct" in config_json:
+                    st.session_state["driver_fault_pct"] = int(config_json["driver_fault_pct"])
+                    st.session_state["driver_fault_slider"] = int(config_json["driver_fault_pct"])
                 if "use_reserve_fleet" in config_json: st.session_state["use_reserve_fleet"] = bool(config_json["use_reserve_fleet"])
                 if "reserve_fleet_qty" in config_json: st.session_state["reserve_fleet_qty"] = int(config_json["reserve_fleet_qty"])
                 if "reserve_cost_per_month" in config_json: st.session_state["reserve_cost_per_month"] = int(config_json["reserve_cost_per_month"])
-                if "reserve_reduction_rate" in config_json: st.session_state["reserve_reduction_rate"] = int(config_json["reserve_reduction_rate"])
+                if "reserve_reduction_rate" in config_json:
+                    st.session_state["reserve_reduction_rate"] = int(config_json["reserve_reduction_rate"])
+                    st.session_state["reserve_red_slider"] = int(config_json["reserve_reduction_rate"])
                 if "include_total_loss" in config_json: st.session_state["include_total_loss"] = bool(config_json["include_total_loss"])
                 if "total_loss_cost" in config_json: st.session_state["total_loss_cost"] = int(config_json["total_loss_cost"])
                 if "emp_salary" in config_json: st.session_state["emp_salary"] = int(config_json["emp_salary"])
@@ -198,27 +203,26 @@ with st.sidebar.expander("Сохранение и загрузка параме�
                         st.session_state[f"ins_{group_name}"] = int(g_params.get("insurance_cost", presets[group_name]["insurance_cost"]))
                 
                 st.session_state["last_loaded_config_hash"] = hash(file_bytes)
-                st.success("Параметры успешно загружены!")
+                st.success("Параметры успешно применены!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Ошибка чтения файла: {e}")
 
     export_payload = {
-        "version": "1.1",
+        "version": "1.2",
         "currency": st.session_state.get("prev_currency", "₽ (RUB)"),
         "fuel_price": st.session_state.get("fuel_price", 65.0),
-        "stat_period_years": st.session_state.get("stat_period_years", 2),
-        "driver_fault_pct": st.session_state.get("driver_fault_pct", 70),
-        "use_reserve_fleet": st.session_state.get("use_reserve_fleet", True),
-        "reserve_fleet_qty": st.session_state.get("reserve_fleet_qty", 10),
-        "reserve_cost_per_month": st.session_state.get("reserve_cost_per_month", 25000),
-        "reserve_reduction_rate": st.session_state.get("reserve_reduction_rate", 35),
-        "include_total_loss": st.session_state.get("include_total_loss", True),
-        "total_loss_cost": st.session_state.get("total_loss_cost", 2500000),
-        "emp_salary": st.session_state.get("emp_salary", 100000),
-        "downtime_loss_per_day": st.session_state.get("downtime_loss_per_day", 0),
-        "disp_salary": st.session_state.get("disp_salary", 80000),
-        "fine_avg_cost": st.session_state.get("fine_avg_cost", 500),
+        "driver_fault_pct": int(st.session_state.get("driver_fault_pct", 70)),
+        "use_reserve_fleet": bool(st.session_state.get("use_reserve_fleet", True)),
+        "reserve_fleet_qty": int(st.session_state.get("reserve_fleet_qty", 10)),
+        "reserve_cost_per_month": int(st.session_state.get("reserve_cost_per_month", 25000)),
+        "reserve_reduction_rate": int(st.session_state.get("reserve_reduction_rate", 35)),
+        "include_total_loss": bool(st.session_state.get("include_total_loss", True)),
+        "total_loss_cost": int(st.session_state.get("total_loss_cost", 2500000)),
+        "emp_salary": int(st.session_state.get("emp_salary", 100000)),
+        "downtime_loss_per_day": int(st.session_state.get("downtime_loss_per_day", 0)),
+        "disp_salary": int(st.session_state.get("disp_salary", 80000)),
+        "fine_avg_cost": int(st.session_state.get("fine_avg_cost", 500)),
         "fleet_params": {}
     }
 
@@ -243,7 +247,7 @@ with st.sidebar.expander("Сохранение и загрузка параме�
 
 st.sidebar.markdown("---")
 
-# ВАЛЮТА И ГОРИЗОНТ ДАННЫХ
+# ВАЛЮТА И СТОИМОСТЬ ТОПЛИВА
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
 is_kzt = "KZT" in currency_choice
 curr_symbol = "₸" if is_kzt else "₽"
@@ -260,14 +264,6 @@ if currency_choice != st.session_state["prev_currency"]:
 
 st.session_state["fuel_price"] = st.sidebar.number_input(f"Цена топлива ({curr_symbol}/литр)", min_value=1.0, value=float(st.session_state["fuel_price"]), step=1.0)
 fuel_price = st.session_state["fuel_price"]
-
-stat_period = st.sidebar.selectbox(
-    "Период предоставленной статистики по ДТП:",
-    [1, 2, 3],
-    index=int(st.session_state["stat_period_years"] - 1),
-    format_func=lambda x: f"{x} {'год' if x==1 else 'года'}"
-)
-st.session_state["stat_period_years"] = stat_period
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Состав и параметры ТС")
@@ -297,15 +293,15 @@ for name, p_default in presets.items():
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
             maintenance = st.number_input(f"ТО + расходники 1 ТС/год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000, key=f"maint_{name}")
             
-            raw_accidents = st.number_input(f"ДТП этой группы за {stat_period} г. (шт)", min_value=0.0, step=0.5, key=acc_key)
-            annual_accidents = raw_accidents / stat_period
+            # Единый годовой ввод аварийности
+            accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, step=0.5, key=acc_key)
             
             accident_cost = st.number_input(f"Ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=5000, key=f"acost_{name}")
             insurance_cost = st.number_input(f"КАСКО и ОСАГО на 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"ins_{name}"]), step=5000, key=f"ins_{name}")
         
         custom_fleet_params[name] = {
             "qty": qty, "mileage": mileage, "consumption": consumption, 
-            "maintenance": maintenance, "accidents_year": annual_accidents, 
+            "maintenance": maintenance, "accidents_year": accidents, 
             "accident_cost": accident_cost, "insurance_cost": insurance_cost,
             **{k: v for k, v in p_default.items() if "eff" in k}
         }
@@ -324,7 +320,7 @@ st.sidebar.subheader("Управление TCO и персоналом")
 with st.sidebar.expander("Потери бэк-офиса и простои персонала", expanded=False):
     st.session_state["emp_salary"] = st.number_input(f"Затраты на 1 водителя в месяц (ФОТ, {curr_symbol})", value=int(st.session_state["emp_salary"]), step=5000)
     st.session_state["downtime_loss_per_day"] = st.number_input(f"Потери от 1 дня простоя 1 ТС ({curr_symbol}/день)", value=int(st.session_state["downtime_loss_per_day"]), step=1000)
-    st.caption("Если используется подменный транспорт — укажите 0 ₽ (затраты будут учтены в блоке резервного фонда).")
+    st.caption("Если используется подменный транспорт — укажите 0 ₽ (затраты учитываются в блоке резервного фонда).")
 
     st.markdown("**Диспетчеризация и администрирование**")
     st.session_state["disp_salary"] = st.number_input(f"ФОТ 1 диспетчера парка в месяц ({curr_symbol})", value=int(st.session_state["disp_salary"]), step=5000)
@@ -341,23 +337,27 @@ with st.sidebar.expander("Потери бэк-офиса и простои пе�
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = 0.5
 
-# МОДЕЛЬ РЕЗЕРВНОГО АВТОПАРКА
+# МОДЕЛЬ РЕЗЕРВНОГО АВТОПАРКА (с защитой целочисленного состояния)
 with st.sidebar.expander("Модель подменного/резервного фонда", expanded=True):
     st.session_state["use_reserve_fleet"] = st.checkbox("В парке содержится резервный транспорт", value=st.session_state["use_reserve_fleet"])
     if st.session_state["use_reserve_fleet"]:
-        default_res_qty = max(2, int(total_fleet_size * 0.05))
         st.session_state["reserve_fleet_qty"] = st.number_input("Количество ТС в резерве (шт)", min_value=1, value=int(st.session_state["reserve_fleet_qty"]), step=1)
         st.session_state["reserve_cost_per_month"] = st.number_input(f"Стоимость владения 1 резервным ТС ({curr_symbol}/мес)", value=int(st.session_state["reserve_cost_per_month"]), step=2000)
         st.caption("Амортизация, налоги, страховка и плановое содержание стоящего в резерве автомобиля.")
-        st.session_state["reserve_reduction_rate"] = st.slider("Потенциал высвобождения резерва при снижении ДТП (%)", 0, 60, int(st.session_state["reserve_reduction_rate"]), step=5) / 100
+        
+        reserve_red_slider_val = st.slider("Потенциал высвобождения резерва при снижении ДТП (%)", min_value=0, max_value=60, value=int(st.session_state["reserve_reduction_rate"]), step=5, key="reserve_red_slider")
+        st.session_state["reserve_reduction_rate"] = reserve_red_slider_val
+        reserve_reduction_ratio = reserve_red_slider_val / 100.0
     else:
         st.session_state["reserve_fleet_qty"] = 0
         st.session_state["reserve_cost_per_month"] = 0
-        st.session_state["reserve_reduction_rate"] = 0.0
+        reserve_reduction_ratio = 0.0
 
-# АНАЛИЗ АВАРИЙНОСТИ И АКТУАРНЫЙ РИСК
+# АНАЛИЗ АВАРИЙНОСТИ И АКТУАРНЫЙ РИСК (с защитой целочисленного состояния)
 with st.sidebar.expander("Анализ причин аварий и Total Loss", expanded=True):
-    st.session_state["driver_fault_pct"] = st.slider("Доля ДТП по вине водителей компании (%)", 10, 100, int(st.session_state["driver_fault_pct"]), step=5) / 100
+    driver_fault_slider_val = st.slider("Доля ДТП по вине водителей компании (%)", min_value=10, max_value=100, value=int(st.session_state["driver_fault_pct"]), step=5, key="driver_fault_slider")
+    st.session_state["driver_fault_pct"] = driver_fault_slider_val
+    fault_ratio = driver_fault_slider_val / 100.0
     st.caption("По статистике филиала: 7 из 10 ДТП (70%) происходят по вине водителя. Именно на них влияют системы SKAI.")
     
     st.session_state["include_total_loss"] = st.checkbox("Учитывать актуарный риск тяжелых ДТП (Total Loss)", value=st.session_state["include_total_loss"])
@@ -397,11 +397,7 @@ for name, cp in custom_fleet_params.items():
     total_mileage_year += cp["mileage"] * q
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
-
-# Затраты на содержание резервного флота
 total_reserve_cost_monthly_before = st.session_state["reserve_fleet_qty"] * st.session_state["reserve_cost_per_month"]
-
-# Актуарный месячный риск тяжелого ДТП
 total_loss_monthly_risk = (st.session_state["total_loss_cost"] / (st.session_state["total_loss_freq_years"] * 12)) if st.session_state["include_total_loss"] else 0.0
 
 # ==========================================
@@ -525,7 +521,7 @@ if "Контроль топлива" in selected_modules:
         savings_by_cat["fuel"] += total_fuel_before * f_eff
 
 # ==========================================
-# СИНЕРГЕТИЧЕСКИЙ РАСЧЕТ И ИНТЕГРАЦИЯ НОВЫХ ФАКТОРОВ
+# СИНЕРГЕТИЧЕСКИЙ РАСЧЕТ
 # ==========================================
 acc_eff_va = modules_raw.get("Видеоаналитика", {}).get("acc_weight", 0.0)
 acc_eff_sd = modules_raw.get("Безопасное вождение", {}).get("acc_weight", 0.0)
@@ -533,25 +529,24 @@ acc_eff_sd = modules_raw.get("Безопасное вождение", {}).get("a
 combined_no_accident_prob = (1.0 - acc_eff_va) * (1.0 - acc_eff_sd)
 total_combined_acc_eff = 1.0 - combined_no_accident_prob
 
-# Эффект предотвращения применяется только к виновным ДТП
-fault_ratio = st.session_state["driver_fault_pct"]
+# Предотвращение ДТП строго по доле виновных аварий
 real_prevention_rate = total_combined_acc_eff * fault_ratio
 
 total_direct_acc_saving = (total_direct_accident_damage_before / 12) * real_prevention_rate
 total_tco_acc_saving = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * real_prevention_rate
 
-# Экономия от высвобождения резервного фонда (активируется при снижении ДТП)
-reserve_saving = (total_reserve_cost_monthly_before * st.session_state["reserve_reduction_rate"]) if total_combined_acc_eff > 0 else 0.0
+# Высвобождение резерва
+reserve_saving = (total_reserve_cost_monthly_before * reserve_reduction_ratio) if total_combined_acc_eff > 0 else 0.0
 
 # Предотвращение катастрофических убытков Total Loss
-total_loss_saving = (total_loss_monthly_risk * real_prevention_rate)
+total_loss_saving = total_loss_monthly_risk * real_prevention_rate
 
 savings_by_cat["acc_direct"] = total_direct_acc_saving
 savings_by_cat["acc_tco"] = total_tco_acc_saving
 savings_by_cat["reserve"] = reserve_saving
 savings_by_cat["total_loss"] = total_loss_saving
 
-# Скидка по КАСКО и ОСАГО закреплена за Видеоаналитикой
+# Скидка по КАСКО и ОСАГО
 has_va = ("Видеоаналитика" in selected_modules)
 total_ins_saving = (total_insurance_before * insurance_discount) if has_va else 0.0
 savings_by_cat["insurance"] = total_ins_saving
@@ -693,7 +688,11 @@ st.markdown("---")
 st.subheader("Анализ стоимости риска аварийности на 100 км пробега")
 
 monthly_mileage_fleet = total_mileage_year / 12 if total_mileage_year > 0 else 1.0
+
+# Базовый ущерб в зависимости от выбранного режима
 base_accident_damage_mode = total_tco_accident_damage_before / 12 if is_tco else total_direct_accident_damage_before / 12
+
+# Сэкономленный ущерб в зависимости от выбранного режима
 saved_accident_damage_mode = (savings_by_cat["acc_direct"] + savings_by_cat["acc_tco"]) if is_tco else savings_by_cat["acc_direct"]
 
 risk_per_100km_before = (base_accident_damage_mode / monthly_mileage_fleet) * 100
@@ -702,7 +701,12 @@ risk_saving_per_100km = risk_per_100km_before - risk_per_100km_after
 
 rc1, rc2, rc3 = st.columns(3)
 rc1.metric("Стоимость риска ДТП до внедрения", f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км")
-rc2.metric("Стоимость риска ДТП со SKAI", f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", delta=f"-{real_prevention_rate*100:.0f}% к виновным ДТП", delta_color="inverse")
+rc2.metric(
+    "Стоимость риска ДТП со SKAI", 
+    f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", 
+    delta=f"-{real_prevention_rate*100:.0f}% к виновным ДТП", 
+    delta_color="inverse"
+)
 with rc3:
     st.markdown(
         f"""
@@ -876,11 +880,9 @@ st.markdown(f"{custom_css}<div class='table-container'>{html_table}</div>", unsa
 st.markdown("---")
 with st.expander("Методология и математический аппарат расчетов", expanded=False):
     st.markdown(r"""
-    ### 1. Нормализация периода и коэффициент вины
-    * **Приведение к годовому темпу:**
-      $$ДТП_{год} = \frac{ДТП_{период}}{Период_{лет}}$$
-    * **Контролируемая аварийность:** Эффект предотвращения применяется только к виновным ДТП:
-      $$E_{факт} = E_{системы} \times Доля_{вины}$$
+    ### 1. Расчет контролируемой аварийности
+    Эффект предотвращения систем SKAI применяется строго к доле виновных ДТП:
+    $$E_{факт} = E_{системы} \times Доля_{вины}$$
 
     ### 2. Модель подменного/резервного фонда
     * **Базовые затраты на резерв:** 
