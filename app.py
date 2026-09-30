@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import base64
+import json
 
 # Настройка страницы в строгом B2B стиле
 st.set_page_config(page_title="Платформа SKAI: Калькулятор TCO и ROI", layout="wide")
@@ -99,6 +100,13 @@ presets = {
     }
 }
 
+# Базовое распределение ТС по умолчанию (перенесено наверх для устранения ошибок Pylance)
+default_qtys = {
+    "Магистральный тягач (Фура)": 30,
+    "Самосвал / Тяжелая спецтехника": 10,
+    "Легкий коммерческий транспорт / Корпоративные авто": 15
+}
+
 monetary_keys = [
     "fuel_price", "emp_salary", "downtime_loss_per_day", "disp_salary", 
     "fine_avg_cost", "s_cap", "s_op", "b_cap", "b_op", "v_cap", "v_op", 
@@ -141,6 +149,86 @@ def fmt(val):
 # 3. СЕКЦИЯ САЙДБАРА: ПАРАМЕТРЫ И СТРУКТУРА ПАРКА
 # ==========================================
 st.sidebar.header("Параметры и конфигурация")
+
+# ==========================================
+# ЭКСПОРТ И ИМПОРТ ПАРАМЕТРОВ АВТОПАРКА (JSON)
+# ==========================================
+with st.sidebar.expander("Сохранение и загрузка параметров", expanded=False):
+    # --- 1. ЗАГРУЗКА ИЗ ФАЙЛА ---
+    uploaded_config = st.file_uploader("Загрузить файл конфигурации (.json)", type=["json"], key="fleet_config_uploader")
+    if uploaded_config is not None:
+        file_bytes = uploaded_config.getvalue()
+        # Защита от бесконечного цикла перезагрузки страницы
+        if st.session_state.get("last_loaded_config_hash") != hash(file_bytes):
+            try:
+                config_json = json.loads(file_bytes.decode("utf-8"))
+                
+                # Восстановление глобальных параметров
+                if "currency" in config_json:
+                    st.session_state["prev_currency"] = config_json["currency"]
+                if "fuel_price" in config_json:
+                    st.session_state["fuel_price"] = float(config_json["fuel_price"])
+                if "emp_salary" in config_json:
+                    st.session_state["emp_salary"] = int(config_json["emp_salary"])
+                if "downtime_loss_per_day" in config_json:
+                    st.session_state["downtime_loss_per_day"] = int(config_json["downtime_loss_per_day"])
+                if "disp_salary" in config_json:
+                    st.session_state["disp_salary"] = int(config_json["disp_salary"])
+                if "fine_avg_cost" in config_json:
+                    st.session_state["fine_avg_cost"] = int(config_json["fine_avg_cost"])
+                
+                # Восстановление параметров групп ТС
+                fleet_data = config_json.get("fleet_params", {})
+                for group_name, g_params in fleet_data.items():
+                    if group_name in presets:
+                        qty_val = int(g_params.get("qty", default_qtys[group_name]))
+                        st.session_state[f"qty_input_{group_name}"] = qty_val
+                        st.session_state[f"prev_qty_{group_name}"] = qty_val
+                        st.session_state[f"mil_{group_name}"] = int(g_params.get("mileage", presets[group_name]["mileage"]))
+                        st.session_state[f"cons_{group_name}"] = float(g_params.get("consumption", presets[group_name]["consumption"]))
+                        st.session_state[f"maint_{group_name}"] = int(g_params.get("maintenance", presets[group_name]["maintenance"]))
+                        st.session_state[f"acc_{group_name}"] = float(g_params.get("accidents_year", 0.0))
+                        st.session_state[f"acost_{group_name}"] = int(g_params.get("accident_cost", presets[group_name]["accident_cost"]))
+                        st.session_state[f"ins_{group_name}"] = int(g_params.get("insurance_cost", presets[group_name]["insurance_cost"]))
+                
+                st.session_state["last_loaded_config_hash"] = hash(file_bytes)
+                st.success("Параметры автопарка успешно применены!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка при загрузке: {e}")
+
+    # --- 2. ВЫГРУЗКА В ФАЙЛ ---
+    export_payload = {
+        "version": "1.0",
+        "currency": st.session_state.get("prev_currency", "₽ (RUB)"),
+        "fuel_price": st.session_state.get("fuel_price", 65.0),
+        "emp_salary": st.session_state.get("emp_salary", 100000),
+        "downtime_loss_per_day": st.session_state.get("downtime_loss_per_day", 10000),
+        "disp_salary": st.session_state.get("disp_salary", 80000),
+        "fine_avg_cost": st.session_state.get("fine_avg_cost", 500),
+        "fleet_params": {}
+    }
+
+    for name in presets.keys():
+        export_payload["fleet_params"][name] = {
+            "qty": st.session_state.get(f"qty_input_{name}", default_qtys[name]),
+            "mileage": st.session_state.get(f"mil_{name}", presets[name]["mileage"]),
+            "consumption": st.session_state.get(f"cons_{name}", presets[name]["consumption"]),
+            "maintenance": st.session_state.get(f"maint_{name}", presets[name]["maintenance"]),
+            "accidents_year": st.session_state.get(f"acc_{name}", round(presets[name]["accidents_year"] * (default_qtys[name] / presets[name]["fleet_size"]), 1)),
+            "accident_cost": st.session_state.get(f"acost_{name}", presets[name]["accident_cost"]),
+            "insurance_cost": st.session_state.get(f"ins_{name}", presets[name]["insurance_cost"])
+        }
+
+    st.download_button(
+        label="Скачать параметры парка (.json)",
+        data=json.dumps(export_payload, ensure_ascii=False, indent=2),
+        file_name="skai_fleet_parameters.json",
+        mime="application/json",
+        use_container_width=True
+    )
+
+st.sidebar.markdown("---")
 
 currency_choice = st.sidebar.radio("Валюта расчетов:", ["₽ (RUB)", "₸ (KZT)"], horizontal=True)
 is_kzt = "KZT" in currency_choice
