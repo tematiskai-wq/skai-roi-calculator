@@ -120,7 +120,7 @@ st.session_state.setdefault("initialized", True)
 st.session_state.setdefault("prev_currency", "₽ (RUB)")
 st.session_state.setdefault("fuel_price", 65.0)
 
-# Числовые проценты хранятся как int (от 0 до 100) во избежание сброса в 0
+# Числовые проценты хранятся строго как int (от 0 до 100)
 st.session_state.setdefault("driver_fault_pct", 70)
 st.session_state.setdefault("use_reserve_fleet", True)
 st.session_state.setdefault("reserve_fleet_qty", 10)
@@ -188,6 +188,13 @@ with st.sidebar.expander("Сохранение и загрузка параме�
                 if "disp_salary" in config_json: st.session_state["disp_salary"] = int(config_json["disp_salary"])
                 if "fine_avg_cost" in config_json: st.session_state["fine_avg_cost"] = int(config_json["fine_avg_cost"])
                 
+                # Загрузка адресации модулей по типам ТС
+                mod_targets = config_json.get("module_targets", {})
+                for m_key, g_list in mod_targets.items():
+                    prefix = "va" if m_key == "Видеоаналитика" else ("f" if m_key == "Контроль топлива" else ("b" if m_key == "Базовый Мониторинг" else "sd"))
+                    for g_name in presets.keys():
+                        st.session_state[f"{prefix}_target_{g_name}"] = (g_name in g_list)
+                
                 # Группы ТС
                 fleet_data = config_json.get("fleet_params", {})
                 for group_name, g_params in fleet_data.items():
@@ -208,8 +215,9 @@ with st.sidebar.expander("Сохранение и загрузка параме�
             except Exception as e:
                 st.error(f"Ошибка чтения файла: {e}")
 
+    # Экспорт с учетом таргетинга модулей
     export_payload = {
-        "version": "1.2",
+        "version": "1.3",
         "currency": st.session_state.get("prev_currency", "₽ (RUB)"),
         "fuel_price": st.session_state.get("fuel_price", 65.0),
         "driver_fault_pct": int(st.session_state.get("driver_fault_pct", 70)),
@@ -223,6 +231,12 @@ with st.sidebar.expander("Сохранение и загрузка параме�
         "downtime_loss_per_day": int(st.session_state.get("downtime_loss_per_day", 0)),
         "disp_salary": int(st.session_state.get("disp_salary", 80000)),
         "fine_avg_cost": int(st.session_state.get("fine_avg_cost", 500)),
+        "module_targets": {
+            "Видеоаналитика": [g for g in presets.keys() if st.session_state.get(f"va_target_{g}", "Легк" not in g)],
+            "Контроль топлива": [g for g in presets.keys() if st.session_state.get(f"f_target_{g}", "Легк" not in g)],
+            "Базовый Мониторинг": [g for g in presets.keys() if st.session_state.get(f"b_target_{g}", True)],
+            "Безопасное вождение": [g for g in presets.keys() if st.session_state.get(f"sd_target_{g}", True)]
+        },
         "fleet_params": {}
     }
 
@@ -292,10 +306,7 @@ for name, p_default in presets.items():
             mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
             consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
             maintenance = st.number_input(f"ТО + расходники 1 ТС/год ({curr_symbol})", min_value=0, value=int(st.session_state[f"maint_{name}"]), step=5000, key=f"maint_{name}")
-            
-            # Единый годовой ввод аварийности
             accidents = st.number_input("ДТП этой группы в год (шт)", min_value=0.0, step=0.5, key=acc_key)
-            
             accident_cost = st.number_input(f"Ущерб/франшиза 1 ДТП ({curr_symbol})", min_value=0, value=int(st.session_state[f"acost_{name}"]), step=5000, key=f"acost_{name}")
             insurance_cost = st.number_input(f"КАСКО и ОСАГО на 1 ТС в год ({curr_symbol})", min_value=0, value=int(st.session_state[f"ins_{name}"]), step=5000, key=f"ins_{name}")
         
@@ -337,7 +348,7 @@ with st.sidebar.expander("Потери бэк-офиса и простои пе�
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = 0.5
 
-# МОДЕЛЬ РЕЗЕРВНОГО АВТОПАРКА (с защитой целочисленного состояния)
+# МОДЕЛЬ РЕЗЕРВНОГО АВТОПАРКА (с защитой от сброса)
 with st.sidebar.expander("Модель подменного/резервного фонда", expanded=True):
     st.session_state["use_reserve_fleet"] = st.checkbox("В парке содержится резервный транспорт", value=st.session_state["use_reserve_fleet"])
     if st.session_state["use_reserve_fleet"]:
@@ -345,19 +356,19 @@ with st.sidebar.expander("Модель подменного/резервного
         st.session_state["reserve_cost_per_month"] = st.number_input(f"Стоимость владения 1 резервным ТС ({curr_symbol}/мес)", value=int(st.session_state["reserve_cost_per_month"]), step=2000)
         st.caption("Амортизация, налоги, страховка и плановое содержание стоящего в резерве автомобиля.")
         
-        reserve_red_slider_val = st.slider("Потенциал высвобождения резерва при снижении ДТП (%)", min_value=0, max_value=60, value=int(st.session_state["reserve_reduction_rate"]), step=5, key="reserve_red_slider")
-        st.session_state["reserve_reduction_rate"] = reserve_red_slider_val
-        reserve_reduction_ratio = reserve_red_slider_val / 100.0
+        reserve_red_slider = st.slider("Потенциал высвобождения резерва при снижении ДТП (%)", min_value=0, max_value=60, value=int(st.session_state["reserve_reduction_rate"]), step=5, key="reserve_red_slider")
+        st.session_state["reserve_reduction_rate"] = reserve_red_slider
+        reserve_reduction_ratio = reserve_red_slider / 100.0
     else:
         st.session_state["reserve_fleet_qty"] = 0
         st.session_state["reserve_cost_per_month"] = 0
         reserve_reduction_ratio = 0.0
 
-# АНАЛИЗ АВАРИЙНОСТИ И АКТУАРНЫЙ РИСК (с защитой целочисленного состояния)
+# АНАЛИЗ АВАРИЙНОСТИ И АКТУАРНЫЙ РИСК (с защитой от сброса)
 with st.sidebar.expander("Анализ причин аварий и Total Loss", expanded=True):
-    driver_fault_slider_val = st.slider("Доля ДТП по вине водителей компании (%)", min_value=10, max_value=100, value=int(st.session_state["driver_fault_pct"]), step=5, key="driver_fault_slider")
-    st.session_state["driver_fault_pct"] = driver_fault_slider_val
-    fault_ratio = driver_fault_slider_val / 100.0
+    driver_fault_slider = st.slider("Доля ДТП по вине водителей компании (%)", min_value=10, max_value=100, value=int(st.session_state["driver_fault_pct"]), step=5, key="driver_fault_slider")
+    st.session_state["driver_fault_pct"] = driver_fault_slider
+    fault_ratio = driver_fault_slider / 100.0
     st.caption("По статистике филиала: 7 из 10 ДТП (70%) происходят по вине водителя. Именно на них влияют системы SKAI.")
     
     st.session_state["include_total_loss"] = st.checkbox("Учитывать актуарный риск тяжелых ДТП (Total Loss)", value=st.session_state["include_total_loss"])
@@ -381,27 +392,49 @@ def get_total_accident_cost(direct_cost):
 fine_loss_per_car_month = (fines_per_car_year * (st.session_state["fine_avg_cost"] + (time_manager_fine * manager_hourly_rate))) / 12
 total_disp_fot_before = disp_qty * st.session_state["disp_salary"]
 
-# Базовые расходы ДО внедрения
-total_fuel_before, total_maint_before, total_accidents_year = 0, 0, 0
-total_direct_accident_damage_before, total_tco_accident_damage_before = 0, 0
-total_insurance_before, total_mileage_year = 0, 0
+# Базовые показатели по каждой группе ТС
+group_metrics = {}
+total_fuel_before = 0
+total_maint_before = 0
+total_insurance_before = 0
+total_mileage_year = 0
+total_accidents_year = 0
+total_direct_accident_damage_before = 0
+total_tco_accident_damage_before = 0
 
 for name, cp in custom_fleet_params.items():
     q = cp["qty"]
-    total_fuel_before += ((cp["mileage"] / 100 * cp["consumption"] * fuel_price) / 12) * q
-    total_maint_before += (cp["maintenance"] / 12) * q
-    total_accidents_year += cp["accidents_year"]
-    total_direct_accident_damage_before += cp["accidents_year"] * cp["accident_cost"]
-    total_tco_accident_damage_before += cp["accidents_year"] * get_total_accident_cost(cp["accident_cost"])
-    total_insurance_before += (cp["insurance_cost"] / 12) * q
+    g_fuel = ((cp["mileage"] / 100 * cp["consumption"] * fuel_price) / 12) * q
+    g_maint = (cp["maintenance"] / 12) * q
+    g_ins = (cp["insurance_cost"] / 12) * q
+    g_direct_acc = cp["accidents_year"] * cp["accident_cost"]
+    g_tco_acc = cp["accidents_year"] * get_total_accident_cost(cp["accident_cost"])
+    
+    group_metrics[name] = {
+        "qty": q,
+        "fuel_before": g_fuel,
+        "maint_before": g_maint,
+        "ins_before": g_ins,
+        "direct_acc_before": g_direct_acc,
+        "tco_acc_before": g_tco_acc
+    }
+    
+    total_fuel_before += g_fuel
+    total_maint_before += g_maint
+    total_insurance_before += g_ins
     total_mileage_year += cp["mileage"] * q
+    total_accidents_year += cp["accidents_year"]
+    total_direct_accident_damage_before += g_direct_acc
+    total_tco_accident_damage_before += g_tco_acc
 
 total_fines_loss_before = fine_loss_per_car_month * total_fleet_size
 total_reserve_cost_monthly_before = st.session_state["reserve_fleet_qty"] * st.session_state["reserve_cost_per_month"]
 total_loss_monthly_risk = (st.session_state["total_loss_cost"] / (st.session_state["total_loss_freq_years"] * 12)) if st.session_state["include_total_loss"] else 0.0
 
+active_fleet_groups = [g for g, q in fleet_quantities.items() if q > 0]
+
 # ==========================================
-# 5. САЙДБАР: МОДУЛИ SKAI
+# 5. САЙДБАР: НАСТРОЙКИ МОДУЛЕЙ И ВЫБОР ТИПОВ ТС
 # ==========================================
 st.sidebar.markdown("---")
 st.sidebar.subheader("Модули платформы SKAI")
@@ -436,19 +469,34 @@ if "Базовый Мониторинг" in selected_modules:
         eff_to = st.slider("Сокращение износа и ТО от исключения перепробегов (%)", 0.0, 15.0, float(default_b_to), step=0.5, key=f"eff_to_{is_gps_installed}") / 100
         eff_fines = st.slider("Сокращение штрафов (%)", 0, 100, int(default_b_fines), step=5, key=f"eff_fines_{is_gps_installed}") / 100
 
-        b_dir_savings = (total_fuel_before * eff_fuel) + (total_maint_before * eff_to)
-        b_tco_savings = total_fines_loss_before * eff_fines
+        st.markdown("**Оснащаемые типы ТС (GPS):**")
+        b_target_groups = []
+        for g_name in active_fleet_groups:
+            clean_g = g_name.split(" (")[0]
+            def_b = st.session_state.get(f"b_target_{g_name}", True)
+            if st.checkbox(f"{clean_g} ({fleet_quantities[g_name]} ТС)", value=def_b, key=f"b_target_{g_name}"):
+                b_target_groups.append(g_name)
+        
+        b_fleet_size = sum(custom_fleet_params[g]["qty"] for g in b_target_groups)
+        st.caption(f"Оснащается: **{b_fleet_size} из {total_fleet_size} ТС**")
+
+        b_fuel_base = sum(group_metrics[g]["fuel_before"] for g in b_target_groups)
+        b_maint_base = sum(group_metrics[g]["maint_before"] for g in b_target_groups)
+        b_fines_base = fine_loss_per_car_month * b_fleet_size
+
+        b_dir_savings = (b_fuel_base * eff_fuel) + (b_maint_base * eff_to)
+        b_tco_savings = b_fines_base * eff_fines
         
         modules_raw["Базовый Мониторинг"] = {
-            "capex": b_capex_input * total_fleet_size, 
-            "opex": b_opex_input * total_fleet_size, 
+            "capex": b_capex_input * b_fleet_size, 
+            "opex": b_opex_input * b_fleet_size, 
             "direct_base": b_dir_savings, 
             "tco_base": b_tco_savings,
-            "acc_weight": 0.0
+            "target_groups": b_target_groups
         }
-        savings_by_cat["fuel"] += total_fuel_before * eff_fuel
-        savings_by_cat["maint"] += total_maint_before * eff_to
-        savings_by_cat["fines"] += total_fines_loss_before * eff_fines
+        savings_by_cat["fuel"] += b_fuel_base * eff_fuel
+        savings_by_cat["maint"] += b_maint_base * eff_to
+        savings_by_cat["fines"] += b_fines_base * eff_fines
 
 # --- СЕРВИС АНАЛИТИКИ И РЕАГИРОВАНИЯ ---
 if "Сервис аналитики и реагирования" in selected_modules:
@@ -462,7 +510,7 @@ if "Сервис аналитики и реагирования" in selected_mod
             "opex": st.session_state["s_op"] * total_fleet_size, 
             "direct_base": 0, 
             "tco_base": total_disp_fot_before * s_eff_disp,
-            "acc_weight": 0.0
+            "target_groups": active_fleet_groups
         }
         savings_by_cat["disp"] += total_disp_fot_before * s_eff_disp
 
@@ -473,12 +521,27 @@ if "Видеоаналитика" in selected_modules:
         st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
         v_eff_acc = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 80, step=5) / 100
         
+        st.markdown("**Оснащаемые типы ТС (Камеры ADAS/DMS):**")
+        va_target_groups = []
+        has_heavy = any("Легк" not in k for k in active_fleet_groups)
+        for g_name in active_fleet_groups:
+            clean_g = g_name.split(" (")[0]
+            default_va = ("Легк" not in g_name) if has_heavy else True
+            val_va = st.session_state.get(f"va_target_{g_name}", default_va)
+            if st.checkbox(f"{clean_g} ({fleet_quantities[g_name]} ТС)", value=val_va, key=f"va_target_{g_name}"):
+                va_target_groups.append(g_name)
+        
+        va_fleet_size = sum(custom_fleet_params[g]["qty"] for g in va_target_groups)
+        st.caption(f"Оснащается: **{va_fleet_size} из {total_fleet_size} ТС**")
+
         modules_raw["Видеоаналитика"] = {
-            "capex": st.session_state["v_cap"] * total_fleet_size, 
-            "opex": st.session_state["v_op"] * total_fleet_size, 
+            "capex": st.session_state["v_cap"] * va_fleet_size, 
+            "opex": st.session_state["v_op"] * va_fleet_size, 
             "direct_base": 0, 
             "tco_base": 0,
-            "acc_weight": v_eff_acc
+            "acc_eff": v_eff_acc,
+            "target_groups": va_target_groups,
+            "fleet_size": va_fleet_size
         }
 
 # --- БЕЗОПАСНОЕ ВОЖДЕНИЕ ---
@@ -491,15 +554,31 @@ if "Безопасное вождение" in selected_modules:
         sd_eff_fuel = st.slider("Снижение расхода топлива от стиля езды (%)", 0.0, 25.0, 10.0, step=0.5) / 100
         sd_eff_to = st.slider("Экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
         
-        sd_fuel_saving = total_fuel_before * sd_eff_fuel
-        sd_maint_saving = total_maint_before * sd_eff_to
+        st.markdown("**Оснащаемые типы ТС (Скоринг вождения):**")
+        sd_target_groups = []
+        for g_name in active_fleet_groups:
+            clean_g = g_name.split(" (")[0]
+            val_sd = st.session_state.get(f"sd_target_{g_name}", True)
+            if st.checkbox(f"{clean_g} ({fleet_quantities[g_name]} ТС)", value=val_sd, key=f"sd_target_{g_name}"):
+                sd_target_groups.append(g_name)
+        
+        sd_fleet_size = sum(custom_fleet_params[g]["qty"] for g in sd_target_groups)
+        st.caption(f"Охвачено: **{sd_fleet_size} из {total_fleet_size} ТС**")
+
+        sd_fuel_base = sum(group_metrics[g]["fuel_before"] for g in sd_target_groups)
+        sd_maint_base = sum(group_metrics[g]["maint_before"] for g in sd_target_groups)
+        
+        sd_fuel_saving = sd_fuel_base * sd_eff_fuel
+        sd_maint_saving = sd_maint_base * sd_eff_to
         
         modules_raw["Безопасное вождение"] = {
-            "capex": st.session_state["sd_cap"] * total_fleet_size, 
-            "opex": st.session_state["sd_op"] * total_fleet_size, 
+            "capex": st.session_state["sd_cap"] * sd_fleet_size, 
+            "opex": st.session_state["sd_op"] * sd_fleet_size, 
             "direct_base": sd_fuel_saving + sd_maint_saving, 
             "tco_base": 0,
-            "acc_weight": sd_eff_acc
+            "acc_eff": sd_eff_acc,
+            "target_groups": sd_target_groups,
+            "fleet_size": sd_fleet_size
         }
         savings_by_cat["fuel"] += sd_fuel_saving
         savings_by_cat["maint"] += sd_maint_saving
@@ -511,60 +590,97 @@ if "Контроль топлива" in selected_modules:
         st.session_state["f_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["f_op"]), step=50)
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", 0.0, 25.0, 10.0, step=0.5) / 100
         
+        st.markdown("**Оснащаемые типы ТС (Датчики ДУТ):**")
+        f_target_groups = []
+        has_heavy = any("Легк" not in k for k in active_fleet_groups)
+        for g_name in active_fleet_groups:
+            clean_g = g_name.split(" (")[0]
+            default_f = ("Легк" not in g_name) if has_heavy else False
+            val_f = st.session_state.get(f"f_target_{g_name}", default_f)
+            if st.checkbox(f"{clean_g} ({fleet_quantities[g_name]} ТС)", value=val_f, key=f"f_target_{g_name}"):
+                f_target_groups.append(g_name)
+        
+        f_fleet_size = sum(custom_fleet_params[g]["qty"] for g in f_target_groups)
+        st.caption(f"Оснащается: **{f_fleet_size} из {total_fleet_size} ТС**")
+
+        f_fuel_base = sum(group_metrics[g]["fuel_before"] for g in f_target_groups)
+        dut_saving = f_fuel_base * f_eff
+        
         modules_raw["Контроль топлива"] = {
-            "capex": st.session_state["f_cap"] * total_fleet_size, 
-            "opex": st.session_state["f_op"] * total_fleet_size, 
-            "direct_base": total_fuel_before * f_eff, 
+            "capex": st.session_state["f_cap"] * f_fleet_size, 
+            "opex": st.session_state["f_op"] * f_fleet_size, 
+            "direct_base": dut_saving, 
             "tco_base": 0,
-            "acc_weight": 0.0
+            "target_groups": f_target_groups
         }
-        savings_by_cat["fuel"] += total_fuel_before * f_eff
+        savings_by_cat["fuel"] += dut_saving
 
 # ==========================================
-# СИНЕРГЕТИЧЕСКИЙ РАСЧЕТ
+# ПОГРУППОВОЙ СИНЕРГЕТИЧЕСКИЙ РАСЧЕТ БЕЗОПАСНОСТИ
 # ==========================================
-acc_eff_va = modules_raw.get("Видеоаналитика", {}).get("acc_weight", 0.0)
-acc_eff_sd = modules_raw.get("Безопасное вождение", {}).get("acc_weight", 0.0)
+va_target_groups = modules_raw.get("Видеоаналитика", {}).get("target_groups", [])
+sd_target_groups = modules_raw.get("Безопасное вождение", {}).get("target_groups", [])
 
-combined_no_accident_prob = (1.0 - acc_eff_va) * (1.0 - acc_eff_sd)
-total_combined_acc_eff = 1.0 - combined_no_accident_prob
+v_eff_val = modules_raw.get("Видеоаналитика", {}).get("acc_eff", 0.0)
+sd_eff_val = modules_raw.get("Безопасное вождение", {}).get("acc_eff", 0.0)
 
-# Предотвращение ДТП строго по доле виновных аварий
-real_prevention_rate = total_combined_acc_eff * fault_ratio
+total_direct_acc_saving = 0.0
+total_tco_acc_saving = 0.0
+group_acc_reductions = {}
 
-total_direct_acc_saving = (total_direct_accident_damage_before / 12) * real_prevention_rate
-total_tco_acc_saving = ((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12) * real_prevention_rate
-
-# Высвобождение резерва
-reserve_saving = (total_reserve_cost_monthly_before * reserve_reduction_ratio) if total_combined_acc_eff > 0 else 0.0
-
-# Предотвращение катастрофических убытков Total Loss
-total_loss_saving = total_loss_monthly_risk * real_prevention_rate
+for g_name, g_data in group_metrics.items():
+    eff_va_g = v_eff_val if (g_name in va_target_groups) else 0.0
+    eff_sd_g = sd_eff_val if (g_name in sd_target_groups) else 0.0
+    comb_eff_g = 1.0 - (1.0 - eff_va_g) * (1.0 - eff_sd_g)
+    real_eff_g = comb_eff_g * fault_ratio
+    group_acc_reductions[g_name] = real_eff_g
+    
+    g_dir_acc_saving = (g_data["direct_acc_before"] / 12) * real_eff_g
+    g_tco_acc_saving = ((g_data["tco_acc_before"] - g_data["direct_acc_before"]) / 12) * real_eff_g
+    
+    total_direct_acc_saving += g_dir_acc_saving
+    total_tco_acc_saving += g_tco_acc_saving
 
 savings_by_cat["acc_direct"] = total_direct_acc_saving
 savings_by_cat["acc_tco"] = total_tco_acc_saving
-savings_by_cat["reserve"] = reserve_saving
-savings_by_cat["total_loss"] = total_loss_saving
 
-# Скидка по КАСКО и ОСАГО
-has_va = ("Видеоаналитика" in selected_modules)
-total_ins_saving = (total_insurance_before * insurance_discount) if has_va else 0.0
+# Скидка по страхованию на оснащенные видеокамерами ТС
+has_va = ("Видеоаналитика" in selected_modules and len(va_target_groups) > 0)
+va_ins_base = sum(group_metrics[g]["ins_before"] for g in va_target_groups)
+total_ins_saving = (va_ins_base * insurance_discount) if has_va else 0.0
 savings_by_cat["insurance"] = total_ins_saving
 
-sum_acc_weights = sum(m["acc_weight"] for m in modules_raw.values())
+# Защита от риска Total Loss при оснащении тяжелой техники / парка
+has_heavy_va = any(g in va_target_groups for g in ["Магистральный тягач (Фура)", "Самосвал / Тяжелая спецтехника"])
+total_loss_saving = total_loss_monthly_risk * (v_eff_val * fault_ratio) if (has_va and (has_heavy_va or len(va_target_groups) == len(active_fleet_groups))) else 0.0
+savings_by_cat["total_loss"] = total_loss_saving
+
+# Оптимизация резервного фонда (активируется при снижении аварийности)
+is_safety_active = (total_direct_acc_saving > 0 or has_va)
+reserve_saving = (total_reserve_cost_monthly_before * reserve_reduction_ratio) if is_safety_active else 0.0
+savings_by_cat["reserve"] = reserve_saving
+
+# Распределение эффектов по продуктам
 modules_payload = {}
+va_weight = v_eff_val if len(va_target_groups) > 0 else 0.0
+sd_weight = sd_eff_val if len(sd_target_groups) > 0 else 0.0
+sum_weights = va_weight + sd_weight
 
 for m_name, m_data in modules_raw.items():
-    if sum_acc_weights > 0 and m_data["acc_weight"] > 0:
-        weight_ratio = m_data["acc_weight"] / sum_acc_weights
-        m_dir_acc = total_direct_acc_saving * weight_ratio
-        m_tco_acc = total_tco_acc_saving * weight_ratio
-        m_res = reserve_saving * weight_ratio
-        m_tl = total_loss_saving * weight_ratio
-    else:
-        m_dir_acc, m_tco_acc, m_res, m_tl = 0.0, 0.0, 0.0, 0.0
-        
-    m_ins = total_ins_saving if m_name == "Видеоаналитика" else 0.0
+    m_dir_acc, m_tco_acc, m_res, m_tl, m_ins = 0.0, 0.0, 0.0, 0.0, 0.0
+    
+    if m_name == "Видеоаналитика" and sum_weights > 0:
+        w_ratio = va_weight / sum_weights
+        m_dir_acc = total_direct_acc_saving * w_ratio
+        m_tco_acc = total_tco_acc_saving * w_ratio
+        m_res = reserve_saving * w_ratio
+        m_tl = total_loss_saving
+        m_ins = total_ins_saving
+    elif m_name == "Безопасное вождение" and sum_weights > 0:
+        w_ratio = sd_weight / sum_weights
+        m_dir_acc = total_direct_acc_saving * w_ratio
+        m_tco_acc = total_tco_acc_saving * w_ratio
+        m_res = reserve_saving * w_ratio
         
     modules_payload[m_name] = {
         "capex": m_data["capex"],
@@ -689,22 +805,22 @@ st.subheader("Анализ стоимости риска аварийности 
 
 monthly_mileage_fleet = total_mileage_year / 12 if total_mileage_year > 0 else 1.0
 
-# Базовый ущерб в зависимости от выбранного режима
 base_accident_damage_mode = total_tco_accident_damage_before / 12 if is_tco else total_direct_accident_damage_before / 12
-
-# Сэкономленный ущерб в зависимости от выбранного режима
 saved_accident_damage_mode = (savings_by_cat["acc_direct"] + savings_by_cat["acc_tco"]) if is_tco else savings_by_cat["acc_direct"]
 
 risk_per_100km_before = (base_accident_damage_mode / monthly_mileage_fleet) * 100
 risk_per_100km_after = ((base_accident_damage_mode - saved_accident_damage_mode) / monthly_mileage_fleet) * 100
 risk_saving_per_100km = risk_per_100km_before - risk_per_100km_after
 
+# Реальный процент снижения аварийного риска по парку
+fleet_risk_reduction_pct = (saved_accident_damage_mode / base_accident_damage_mode * 100) if base_accident_damage_mode > 0 else 0.0
+
 rc1, rc2, rc3 = st.columns(3)
 rc1.metric("Стоимость риска ДТП до внедрения", f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км")
 rc2.metric(
     "Стоимость риска ДТП со SKAI", 
     f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", 
-    delta=f"-{real_prevention_rate*100:.0f}% к виновным ДТП", 
+    delta=f"-{fleet_risk_reduction_pct:.0f}% к риску" if fleet_risk_reduction_pct > 0 else "0%", 
     delta_color="inverse"
 )
 with rc3:
@@ -881,8 +997,8 @@ st.markdown("---")
 with st.expander("Методология и математический аппарат расчетов", expanded=False):
     st.markdown(r"""
     ### 1. Расчет контролируемой аварийности
-    Эффект предотвращения систем SKAI применяется строго к доле виновных ДТП:
-    $$E_{факт} = E_{системы} \times Доля_{вины}$$
+    Эффект систем безопасности SKAI применяется строго к оснащенным категориям ТС и доле виновных аварий:
+    $$E_{факт, g} = E_{системы} \times Доля_{вины}$$
 
     ### 2. Модель подменного/резервного фонда
     * **Базовые затраты на резерв:** 
