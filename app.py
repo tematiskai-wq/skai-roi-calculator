@@ -460,7 +460,7 @@ if "Базовый Мониторинг" in selected_modules:
         eff_to = st.slider("Сокращение износа и ТО от исключения перепробегов (%)", 0.0, 15.0, float(default_b_to), step=0.5, key=f"eff_to_{is_gps_installed}") / 100
         eff_fines = st.slider("Сокращение штрафов (%)", 0, 100, int(default_b_fines), step=5, key=f"eff_fines_{is_gps_installed}") / 100
 
-        st.markdown("**Оснащаемые типы ТС (GPS):**")
+        st.markdown("**Оснащаемые типы ТС:**")
         b_target_groups = []
         for g_name in all_fleet_preset_groups:
             clean_g = g_name.split(" (")[0]
@@ -512,7 +512,7 @@ if "Видеоаналитика" in selected_modules:
         st.session_state["v_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["v_op"]), step=100)
         v_eff_acc = st.slider("Снижение аварийности со SKAI (%)", 0, 100, 80, step=5) / 100
         
-        st.markdown("**Оснащаемые типы ТС (Камеры ADAS/DMS):**")
+        st.markdown("**Оснащаемые типы ТС:**")
         va_target_groups = []
         has_heavy = any("Легк" not in k for k in all_fleet_preset_groups)
         for g_name in all_fleet_preset_groups:
@@ -545,7 +545,7 @@ if "Безопасное вождение" in selected_modules:
         sd_eff_fuel = st.slider("Снижение расхода топлива от стиля езды (%)", 0.0, 25.0, 10.0, step=0.5) / 100
         sd_eff_to = st.slider("Экономия на ТО от бережной езды (%)", 0, 40, 15, step=5) / 100
         
-        st.markdown("**Оснащаемые типы ТС (Скоринг вождения):**")
+        st.markdown("**Оснащаемые типы ТС:**")
         sd_target_groups = []
         for g_name in all_fleet_preset_groups:
             clean_g = g_name.split(" (")[0]
@@ -583,7 +583,7 @@ if "Контроль топлива" in selected_modules:
         # Лимит 25% снят — диапазон до 100.0%
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", min_value=0.0, max_value=100.0, value=10.0, step=0.5) / 100
         
-        st.markdown("**Оснащаемые типы ТС (Датчики ДУТ):**")
+        st.markdown("**Оснащаемые типы ТС:**")
         f_target_groups = []
         has_heavy = any("Легк" not in k for k in all_fleet_preset_groups)
         for g_name in all_fleet_preset_groups:
