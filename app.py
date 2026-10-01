@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -82,7 +83,7 @@ img[data-testid="stLogo"] {
     width: 20px !important;
     height: 20px !important;
     border-radius: 50% !important;
-    background-color: #F1F5F9 !important;
+    background-color: #F8FAFC !important;
     border: 1px solid #CBD5E1 !important;
     color: #64748B !important;
     text-decoration: none !important;
@@ -98,7 +99,8 @@ img[data-testid="stLogo"] {
     color: #FFFFFF !important;
     background-color: #2563EB !important;
     border-color: #2563EB !important;
-    transform: scale(1.1) !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+    transform: translateY(-1px) !important;
 }
 
 .anchor-badge svg {
@@ -127,15 +129,13 @@ img[data-testid="stLogo"] {
 .calc-target-block {
     transition: background-color 0.4s ease;
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 8px 12px;
     margin: 6px 0;
 }
 
-:target,
 .highlight-active {
     animation: highlightBrief 2.5s ease-out forwards !important;
     border-radius: 6px;
-    scroll-margin-top: 85px;
     display: block;
 }
 
@@ -159,17 +159,78 @@ img[data-testid="stLogo"] {
     border-bottom: 2px solid #E2E8F0;
 }
 .styled-tco-table td {
-    padding: 9px 14px;
+    padding: 10px 14px;
     border-bottom: 1px solid #F1F5F9;
     color: #1E293B;
 }
 .styled-tco-table tr:hover {
     background-color: #F8FAFC;
 }
+
+/* Скрытие технического iframe контроллера */
+iframe[title="skai_nav_controller"] {
+    position: fixed !important;
+    bottom: -200px !important;
+    left: -200px !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
 </style>""", unsafe_allow_html=True)
 
-# Функция генерации векторного SVG-якоря
-def make_anchor_badge(target_id, tooltip="Смотреть методологию и обоснование"):
+# JS-контроллер навигации
+components.html("""
+<script>
+(function() {
+    function setupNav() {
+        try {
+            var doc = window.parent.document;
+            if (!doc) return;
+            
+            if (doc.__skai_nav_handler) {
+                doc.removeEventListener('click', doc.__skai_nav_handler, true);
+            }
+            
+            doc.__skai_nav_handler = function(e) {
+                var btn = e.target.closest('[data-scroll-to]');
+                if (!btn) return;
+                
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var targetId = btn.getAttribute('data-scroll-to');
+                var target = doc.getElementById(targetId);
+                
+                if (target) {
+                    var p = target.closest('details');
+                    while (p) {
+                        p.open = true;
+                        p = p.parentElement ? p.parentElement.closest('details') : null;
+                    }
+                    
+                    setTimeout(function() {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        target.classList.remove('highlight-active');
+                        void target.offsetWidth;
+                        target.classList.add('highlight-active');
+                    }, 50);
+                }
+            };
+            
+            doc.addEventListener('click', doc.__skai_nav_handler, true);
+        } catch(err) {
+            console.warn('SKAI nav:', err);
+        }
+    }
+    setupNav();
+    setTimeout(setupNav, 400);
+})();
+</script>
+""", height=0, width=0)
+
+# Генератор векторного SVG-якоря
+def make_anchor_badge(target_id, tooltip="Смотреть методологию и расчет"):
     svg_icon = (
         '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" '
         'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
@@ -178,15 +239,10 @@ def make_anchor_badge(target_id, tooltip="Смотреть методологи�
         '<line x1="12" y1="8" x2="12.01" y2="8"></line>'
         '</svg>'
     )
-    onclick_js = (
-        f"const el=document.getElementById('{target_id}'); "
-        "if(el){ "
-        "const d=el.closest('details'); if(d) d.open=true; "
-        "el.scrollIntoView({behavior:'smooth', block:'center'}); "
-        "el.classList.remove('highlight-active'); void el.offsetWidth; el.classList.add('highlight-active'); "
-        "} return false;"
+    return (
+        f'<a href="javascript:void(0);" data-scroll-to="{target_id}" '
+        f'class="anchor-badge" title="{tooltip}">{svg_icon}</a>'
     )
-    return f'<a href="#{target_id}" onclick="{onclick_js}" class="anchor-badge" title="{tooltip}">{svg_icon}</a>'
 
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ
@@ -464,7 +520,7 @@ with st.sidebar.expander("Потери бэк-офиса и простои пе�
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = 0.5
 
-# РЕЗЕРВНЫЙ АВТОПАРК
+# РЕЗЕРВНЫЙ АВТОПАРК (Вариант Г)
 with st.sidebar.expander("Резервный автопарк", expanded=True):
     st.session_state["use_reserve_fleet"] = st.checkbox("В компании содержится резервный автопарк", value=st.session_state["use_reserve_fleet"])
     if st.session_state["use_reserve_fleet"]:
@@ -851,7 +907,6 @@ st.markdown(distribution_bar_html + cards_html, unsafe_allow_html=True)
 
 # ОЦЕНКА ЗОНЫ ПОТЕРЬ СО ССЫЛКАМИ-ЯКОРЯМИ
 annual_direct_accidents = total_direct_accident_damage_before
-annual_iceberg_hidden = annual_direct_accidents * 3.0
 annual_fuel_total = total_fuel_before * 12
 annual_waste_fuel = annual_fuel_total * 0.12
 annual_reserve_waste = total_reserve_cost_monthly_before * 12
