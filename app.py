@@ -40,7 +40,7 @@ logo_b64 = base64.b64encode(SKAI_LOGO_SVG.encode("utf-8")).decode("utf-8")
 st.logo(f"data:image/svg+xml;base64,{logo_b64}")
 
 st.markdown("""<style>
-/* 1. Плавный скролл по якорным ссылкам */
+/* 1. Плавная прокрутка */
 html {
     scroll-behavior: smooth !important;
 }
@@ -74,37 +74,42 @@ img[data-testid="stLogo"] {
     object-fit: contain !important;
 }
 
-/* 3. Стиль значка-якоря (badge) */
-.anchor-badge, 
-[data-testid="stMetricLabel"] a {
+/* 3. Четкий векторный бейдж-якорь */
+.anchor-badge {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 15px !important;
-    height: 15px !important;
-    font-size: 10px !important;
-    font-weight: 700 !important;
-    color: #64748B !important;
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
     background-color: #F1F5F9 !important;
     border: 1px solid #CBD5E1 !important;
-    border-radius: 50% !important;
+    color: #64748B !important;
     text-decoration: none !important;
-    margin-left: 5px !important;
+    margin-left: 6px !important;
     vertical-align: middle !important;
-    line-height: 1 !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
 }
 
-.anchor-badge:hover, 
-[data-testid="stMetricLabel"] a:hover {
+.anchor-badge:hover {
     color: #FFFFFF !important;
     background-color: #2563EB !important;
     border-color: #2563EB !important;
+    transform: scale(1.1) !important;
 }
 
-/* 4. Анимация кратковременной светло-серой подсветки строки-обоснования */
-@keyframes highlightTargetBrief {
+.anchor-badge svg {
+    display: block !important;
+    width: 12px !important;
+    height: 12px !important;
+    pointer-events: none !important;
+}
+
+/* 4. Анимация мягкой светло-серой подсветки строки */
+@keyframes highlightBrief {
     0% {
         background-color: #E2E8F0;
         box-shadow: 0 0 0 6px #E2E8F0;
@@ -127,14 +132,14 @@ img[data-testid="stLogo"] {
 }
 
 :target,
-.calc-target-block:target {
-    animation: highlightTargetBrief 2.5s ease-out forwards;
+.highlight-active {
+    animation: highlightBrief 2.5s ease-out forwards !important;
     border-radius: 6px;
     scroll-margin-top: 85px;
     display: block;
 }
 
-/* 5. Стиль интерактивной таблицы TCO с поддержкой якорей */
+/* 5. Интерактивная таблица TCO */
 .styled-tco-table {
     border-collapse: collapse;
     width: 100%;
@@ -162,6 +167,26 @@ img[data-testid="stLogo"] {
     background-color: #F8FAFC;
 }
 </style>""", unsafe_allow_html=True)
+
+# Функция генерации векторного SVG-якоря
+def make_anchor_badge(target_id, tooltip="Смотреть методологию и обоснование"):
+    svg_icon = (
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" '
+        'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="12" cy="12" r="10"></circle>'
+        '<line x1="12" y1="16" x2="12" y2="12"></line>'
+        '<line x1="12" y1="8" x2="12.01" y2="8"></line>'
+        '</svg>'
+    )
+    onclick_js = (
+        f"const el=document.getElementById('{target_id}'); "
+        "if(el){ "
+        "const d=el.closest('details'); if(d) d.open=true; "
+        "el.scrollIntoView({behavior:'smooth', block:'center'}); "
+        "el.classList.remove('highlight-active'); void el.offsetWidth; el.classList.add('highlight-active'); "
+        "} return false;"
+    )
+    return f'<a href="#{target_id}" onclick="{onclick_js}" class="anchor-badge" title="{tooltip}">{svg_icon}</a>'
 
 # ==========================================
 # 1. БАЗА ДАННЫХ ПРЕСЕТОВ
@@ -214,7 +239,7 @@ st.session_state.setdefault("initialized", True)
 st.session_state.setdefault("prev_currency", "₽ (RUB)")
 st.session_state.setdefault("fuel_price", 65.0)
 
-# Числовые проценты хранятся строго как int (от 0 до 100)
+# Числовые проценты хранятся строго как int
 st.session_state.setdefault("driver_fault_pct", 70)
 st.session_state.setdefault("use_reserve_fleet", True)
 st.session_state.setdefault("reserve_fleet_qty", 10)
@@ -374,7 +399,7 @@ st.sidebar.subheader("Состав и параметры ТС")
 fleet_quantities = {}
 custom_fleet_params = {}
 
-# Настройки отображаются ВСЕГДА для всех категорий ТС (с уведомлением при qty == 0)
+# Настройки отображаются ВСЕГДА для всех категорий ТС
 for name, p_default in presets.items():
     qty = st.sidebar.number_input(f"{name} (шт):", min_value=0, value=default_qtys[name], step=5, key=f"qty_input_{name}")
     fleet_quantities[name] = qty
@@ -392,7 +417,7 @@ for name, p_default in presets.items():
     
     with st.sidebar.expander(f"Настройки: {clean_name}", expanded=False):
         if qty == 0:
-            st.info(f"Количество ТС данной категории установлено на 0 шт. Настройки сохраняются для расчета потенциальных сценариев.")
+            st.info("Количество ТС данной категории установлено на 0 шт. Настройки сохраняются для расчета потенциальных сценариев.")
         
         mileage = st.number_input("Пробег 1 ТС в год (км)", min_value=1000, value=p_default["mileage"], step=5000, key=f"mil_{name}")
         consumption = st.number_input("Расход (л/100 км)", min_value=1.0, value=p_default["consumption"], step=0.5, key=f"cons_{name}")
@@ -439,7 +464,7 @@ with st.sidebar.expander("Потери бэк-офиса и простои пе�
     st.session_state["fine_avg_cost"] = st.number_input(f"Средняя стоимость 1 штрафа ({curr_symbol})", value=int(st.session_state["fine_avg_cost"]), step=100)
     time_manager_fine = 0.5
 
-# РЕЗЕРВНЫЙ АВТОПАРК (Вариант Г: чистая фиксация базовых затрат владения)
+# РЕЗЕРВНЫЙ АВТОПАРК
 with st.sidebar.expander("Резервный автопарк", expanded=True):
     st.session_state["use_reserve_fleet"] = st.checkbox("В компании содержится резервный автопарк", value=st.session_state["use_reserve_fleet"])
     if st.session_state["use_reserve_fleet"]:
@@ -674,7 +699,6 @@ if "Контроль топлива" in selected_modules:
         st.session_state["f_cap"] = st.number_input(f"Стоимость ДУТ на 1 ТС ({curr_symbol})", value=int(st.session_state["f_cap"]), step=2000)
         st.session_state["f_op"] = st.number_input(f"АП на 1 ТС/мес ({curr_symbol})", value=int(st.session_state["f_op"]), step=50)
         
-        # Лимит 25% снят — диапазон до 100.0%
         f_eff = st.slider("Прямая экономия ГСМ (сливы/карты) (%)", min_value=0.0, max_value=100.0, value=10.0, step=0.5) / 100
         
         st.markdown("**Оснащаемые типы ТС:**")
@@ -842,7 +866,7 @@ st.markdown(
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEE2E2; border-radius: 6px; padding: 10px 14px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="font-size: 12px; font-weight: 600; color: #991B1B;">Прямой ущерб от ДТП</div>
-                    <a href="#just-accidents" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                    {make_anchor_badge("just-accidents", "Смотреть обоснование")}
                 </div>
                 <div style="font-size: 20px; font-weight: 700; color: #DC2626; margin: 2px 0;">~{fmt(annual_direct_accidents)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Счета СТО при {total_accidents_year:.1f} ДТП/год (вина: {int(fault_ratio*100)}%)</div>
@@ -850,7 +874,7 @@ st.markdown(
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FFE4E6; border-radius: 6px; padding: 10px 14px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="font-size: 12px; font-weight: 600; color: #9F1239;">Содержание резерва ТС</div>
-                    <a href="#just-reserve" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                    {make_anchor_badge("just-reserve", "Смотреть обоснование")}
                 </div>
                 <div style="font-size: 20px; font-weight: 700; color: #E11D48; margin: 2px 0;">~{fmt(annual_reserve_waste)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Расходы на {st.session_state['reserve_fleet_qty']} подменных ТС резервного парка</div>
@@ -858,7 +882,7 @@ st.markdown(
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEF3C7; border-radius: 6px; padding: 10px 14px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="font-size: 12px; font-weight: 600; color: #92400E;">Балласт по ГСМ (ХХ и съезды)</div>
-                    <a href="#just-fuel" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                    {make_anchor_badge("just-fuel", "Смотреть обоснование")}
                 </div>
                 <div style="font-size: 20px; font-weight: 700; color: #D97706; margin: 2px 0;">~{fmt(annual_waste_fuel)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">10–14% топлива сжигается впустую на стоянках и приписках</div>
@@ -866,7 +890,7 @@ st.markdown(
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px 14px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="font-size: 12px; font-weight: 600; color: #334155;">Актуарный риск (Тотал)</div>
-                    <a href="#just-totalloss" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                    {make_anchor_badge("just-totalloss", "Смотреть обоснование")}
                 </div>
                 <div style="font-size: 20px; font-weight: 700; color: #475569; margin: 2px 0;">~{fmt(total_loss_monthly_risk * 12)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Вероятность 1 тяжелого ДТП раз в {st.session_state['total_loss_freq_years']} г.</div>
@@ -890,10 +914,32 @@ net_monthly_benefit = total_monthly_saving - total_opex_monthly
 payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 else float('inf')
 
 st.subheader("Экономические показатели проекта")
-m1, m2, m3 = st.columns(3)
-m1.metric("Капитальные вложения (Стартовые инвестиции) [ⓘ](#meth-capex)", f"{fmt(total_capex)} {curr_symbol}")
-m2.metric("Чистая экономия в месяц [ⓘ](#meth-net-benefit)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
-m3.metric("Срок окупаемости инвестиций [ⓘ](#meth-payback)", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
+m_html = f"""
+<div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;">
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Капитальные вложения (Стартовые инвестиции)</div>
+            {make_anchor_badge("meth-capex", "Методология расчета CAPEX")}
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.2;">{fmt(total_capex)} {curr_symbol}</div>
+    </div>
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Чистая экономия в месяц</div>
+            {make_anchor_badge("meth-net-benefit", "Методология расчета чистой экономии")}
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.2;">{fmt(net_monthly_benefit)} {curr_symbol}</div>
+    </div>
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Срок окупаемости инвестиций</div>
+            {make_anchor_badge("meth-payback", "Формула окупаемости проекта")}
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.2;">{f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается"}</div>
+    </div>
+</div>
+"""
+st.markdown(m_html, unsafe_allow_html=True)
 
 # ==========================================
 # РАСЧЕТ СТОИМОСТИ РИСКА ДТП НА 100 КМ ПРОБЕГА СО ССЫЛКАМИ-ЯКОРЯМИ
@@ -912,30 +958,33 @@ risk_saving_per_100km = risk_per_100km_before - risk_per_100km_after
 
 fleet_risk_reduction_pct = (saved_accident_damage_mode / base_accident_damage_mode * 100) if base_accident_damage_mode > 0 else 0.0
 
-rc1, rc2, rc3 = st.columns(3)
-rc1.metric("Стоимость риска ДТП до внедрения [ⓘ](#meth-risk-100km)", f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км")
-rc2.metric(
-    "Стоимость риска ДТП со SKAI [ⓘ](#meth-risk-100km)", 
-    f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", 
-    delta=f"-{fleet_risk_reduction_pct:.0f}% к риску" if fleet_risk_reduction_pct > 0 else "0%", 
-    delta_color="inverse"
-)
-with rc3:
-    st.markdown(
-        f"""
-        <div>
-            <div style="font-size: 14px; opacity: 0.85; margin-bottom: 4px; display: flex; align-items: center;">
-                <span>Чистая экономия на 100 км пути</span>
-                <a href="#meth-risk-100km" class="anchor-badge" title="Смотреть методологию расчета">ⓘ</a>
-            </div>
-            <div style="font-size: 32px; font-weight: 700; color: #09ab3b; line-height: 1.2;">
-                +{risk_saving_per_100km:.1f} {curr_symbol} / 100 км
-            </div>
+risk_cards_html = f"""
+<div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;">
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Стоимость риска ДТП до внедрения</div>
+            {make_anchor_badge("meth-risk-100km", "Формула риска ДТП на 100 км")}
         </div>
-        """,
-        unsafe_allow_html=True
-    )
-
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.2;">{risk_per_100km_before:.1f} {curr_symbol} / 100 км</div>
+    </div>
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Стоимость риска ДТП со SKAI</div>
+            {make_anchor_badge("meth-risk-100km", "Формула риска ДТП со SKAI")}
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #0F172A; line-height: 1.2;">{risk_per_100km_after:.1f} {curr_symbol} / 100 км</div>
+        <div style="font-size: 12px; font-weight: 600; color: #059669; margin-top: 4px;">↓ -{fleet_risk_reduction_pct:.0f}% к риску</div>
+    </div>
+    <div style="flex: 1 1 240px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 13px; font-weight: 500; color: #475569;">Чистая экономия на 100 км пути</div>
+            {make_anchor_badge("meth-risk-100km", "Формула экономии на 100 км")}
+        </div>
+        <div style="font-size: 28px; font-weight: 700; color: #059669; line-height: 1.2;">+{risk_saving_per_100km:.1f} {curr_symbol} / 100 км</div>
+    </div>
+</div>
+"""
+st.markdown(risk_cards_html, unsafe_allow_html=True)
 st.markdown("---")
 
 # ==========================================
@@ -956,7 +1005,7 @@ tco_table_data = [
 tco_rows_html = ""
 for item_name, b_cost, p_sav, f_type, anchor_id in tco_table_data:
     tco_rows_html += f"""<tr>
-<td>{item_name} <a href="#{anchor_id}" class="anchor-badge" title="Смотреть методологию и формулу">ⓘ</a></td>
+<td>{item_name} {make_anchor_badge(anchor_id, "Смотреть методологию и формулу")}</td>
 <td style="font-weight: 500;">{b_cost}</td>
 <td style="color: #059669; font-weight: 600;">{p_sav}</td>
 <td style="color: #64748B;">{f_type}</td>
@@ -1116,7 +1165,7 @@ st.markdown(f"{custom_css}<div class='table-container'>{html_table}</div>", unsa
 # 8. МЕТОДОЛОГИЯ И МАТЕМАТИЧЕСКИЙ АППАРАТ РАСЧЕТА
 # ==========================================
 st.markdown("---")
-with st.expander("Методология и математический аппарат расчетов", expanded=False):
+with st.expander("Методология и математический аппарат расчетов", expanded=True):
     st.markdown(r"""
     ### 1. Расчет базовых ежемесячных затрат автопарка (до внедрения SKAI)
     
@@ -1225,7 +1274,7 @@ with st.expander("Методология и математический апп�
 # 9. ОБОСНОВАНИЕ ПОКАЗАТЕЛЕЙ ДЛЯ РАСЧЕТА
 # ==========================================
 st.markdown("---")
-with st.expander("Обоснование показателей эффективности и источники данных", expanded=False):
+with st.expander("Обоснование показателей эффективности и источники данных", expanded=True):
     st.markdown("""
     ### Базовый мониторинг
     <div id="just-fuel" class="calc-target-block">
@@ -1314,4 +1363,5 @@ with st.expander("Обоснование показателей эффектив
     * **Прямая экономия ГСМ (сливы/карты) (%):**
         * **Источник:** Практика интеграции цифровых ДУТ и сверки с транзакциями АЗС. Пресечение сливов и махинаций сохраняет от 8% до 12% топлива на тяжелой технике и грузовиках.
         * **Влияние на расчет:** Напрямую уменьшает базовые затраты на ГСМ независимо от пробега.
+    </div>
     """)
