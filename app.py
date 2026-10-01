@@ -40,6 +40,12 @@ logo_b64 = base64.b64encode(SKAI_LOGO_SVG.encode("utf-8")).decode("utf-8")
 st.logo(f"data:image/svg+xml;base64,{logo_b64}")
 
 st.markdown("""<style>
+/* 1. Плавный скролл по якорным ссылкам */
+html {
+    scroll-behavior: smooth !important;
+}
+
+/* 2. Шапка сайдбара */
 [data-testid="stSidebarHeader"] {
     position: sticky !important;
     top: 0 !important;
@@ -66,6 +72,94 @@ img[data-testid="stLogo"] {
     max-height: 56px !important;
     width: auto !important;
     object-fit: contain !important;
+}
+
+/* 3. Стиль значка-якоря (badge) */
+.anchor-badge, 
+[data-testid="stMetricLabel"] a {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 15px !important;
+    height: 15px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #64748B !important;
+    background-color: #F1F5F9 !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 50% !important;
+    text-decoration: none !important;
+    margin-left: 5px !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.anchor-badge:hover, 
+[data-testid="stMetricLabel"] a:hover {
+    color: #FFFFFF !important;
+    background-color: #2563EB !important;
+    border-color: #2563EB !important;
+}
+
+/* 4. Анимация кратковременной светло-серой подсветки строки-обоснования */
+@keyframes highlightTargetBrief {
+    0% {
+        background-color: #E2E8F0;
+        box-shadow: 0 0 0 6px #E2E8F0;
+    }
+    60% {
+        background-color: #E2E8F0;
+        box-shadow: 0 0 0 6px #E2E8F0;
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+.calc-target-block {
+    transition: background-color 0.4s ease;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 6px 0;
+}
+
+:target,
+.calc-target-block:target {
+    animation: highlightTargetBrief 2.5s ease-out forwards;
+    border-radius: 6px;
+    scroll-margin-top: 85px;
+    display: block;
+}
+
+/* 5. Стиль интерактивной таблицы TCO с поддержкой якорей */
+.styled-tco-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    margin: 12px 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #E2E8F0;
+}
+.styled-tco-table th {
+    background-color: #F8FAFC;
+    color: #475569;
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    border-bottom: 2px solid #E2E8F0;
+}
+.styled-tco-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #F1F5F9;
+    color: #1E293B;
+}
+.styled-tco-table tr:hover {
+    background-color: #F8FAFC;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -211,7 +305,7 @@ with st.sidebar.expander("Сохранение и загрузка параме�
             except Exception as e:
                 st.error(f"Ошибка чтения файла: {e}")
 
-    # Экспорт конфигурации (схема v1.4 без высвобождения резерва)
+    # Экспорт конфигурации (схема v1.4)
     export_payload = {
         "version": "1.4",
         "currency": st.session_state.get("prev_currency", "₽ (RUB)"),
@@ -731,7 +825,7 @@ for idx, (name, cp) in enumerate(custom_fleet_params.items()):
 cards_html += "</div>"
 st.markdown(distribution_bar_html + cards_html, unsafe_allow_html=True)
 
-# ОЦЕНКА ЗОНЫ ПОТЕРЬ
+# ОЦЕНКА ЗОНЫ ПОТЕРЬ СО ССЫЛКАМИ-ЯКОРЯМИ
 annual_direct_accidents = total_direct_accident_damage_before
 annual_iceberg_hidden = annual_direct_accidents * 3.0
 annual_fuel_total = total_fuel_before * 12
@@ -746,22 +840,34 @@ st.markdown(
         </div>
         <div style="display: flex; gap: 16px; flex-wrap: wrap;">
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEE2E2; border-radius: 6px; padding: 10px 14px;">
-                <div style="font-size: 12px; font-weight: 600; color: #991B1B;">Прямой ущерб от ДТП</div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 12px; font-weight: 600; color: #991B1B;">Прямой ущерб от ДТП</div>
+                    <a href="#just-accidents" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                </div>
                 <div style="font-size: 20px; font-weight: 700; color: #DC2626; margin: 2px 0;">~{fmt(annual_direct_accidents)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Счета СТО при {total_accidents_year:.1f} ДТП/год (вина: {int(fault_ratio*100)}%)</div>
             </div>
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FFE4E6; border-radius: 6px; padding: 10px 14px;">
-                <div style="font-size: 12px; font-weight: 600; color: #9F1239;">Содержание резерва ТС</div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 12px; font-weight: 600; color: #9F1239;">Содержание резерва ТС</div>
+                    <a href="#just-reserve" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                </div>
                 <div style="font-size: 20px; font-weight: 700; color: #E11D48; margin: 2px 0;">~{fmt(annual_reserve_waste)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Расходы на {st.session_state['reserve_fleet_qty']} подменных ТС резервного парка</div>
             </div>
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #FEF3C7; border-radius: 6px; padding: 10px 14px;">
-                <div style="font-size: 12px; font-weight: 600; color: #92400E;">Балласт по ГСМ (ХХ и съезды)</div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 12px; font-weight: 600; color: #92400E;">Балласт по ГСМ (ХХ и съезды)</div>
+                    <a href="#just-fuel" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                </div>
                 <div style="font-size: 20px; font-weight: 700; color: #D97706; margin: 2px 0;">~{fmt(annual_waste_fuel)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">10–14% топлива сжигается впустую на стоянках и приписках</div>
             </div>
             <div style="flex: 1 1 210px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px 14px;">
-                <div style="font-size: 12px; font-weight: 600; color: #334155;">Актуарный риск (Тотал)</div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 12px; font-weight: 600; color: #334155;">Актуарный риск (Тотал)</div>
+                    <a href="#just-totalloss" class="anchor-badge" title="Смотреть обоснование">ⓘ</a>
+                </div>
                 <div style="font-size: 20px; font-weight: 700; color: #475569; margin: 2px 0;">~{fmt(total_loss_monthly_risk * 12)} {curr_symbol}/год</div>
                 <div style="font-size: 11px; color: #64748B;">Вероятность 1 тяжелого ДТП раз в {st.session_state['total_loss_freq_years']} г.</div>
             </div>
@@ -785,12 +891,12 @@ payback_period = total_capex / net_monthly_benefit if net_monthly_benefit > 0 el
 
 st.subheader("Экономические показатели проекта")
 m1, m2, m3 = st.columns(3)
-m1.metric("Капитальные вложения (Стартовые инвестиции)", f"{fmt(total_capex)} {curr_symbol}")
-m2.metric("Чистая экономия в месяц", f"{fmt(net_monthly_benefit)} {curr_symbol}")
-m3.metric("Срок окупаемости инвестиций", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
+m1.metric("Капитальные вложения (Стартовые инвестиции) [ⓘ](#meth-capex)", f"{fmt(total_capex)} {curr_symbol}")
+m2.metric("Чистая экономия в месяц [ⓘ](#meth-net-benefit)", f"{fmt(net_monthly_benefit)} {curr_symbol}")
+m3.metric("Срок окупаемости инвестиций [ⓘ](#meth-payback)", f"{payback_period:.1f} мес." if payback_period != float('inf') else "Проект не окупается")
 
 # ==========================================
-# РАСЧЕТ СТОИМОСТИ РИСКА ДТП НА 100 КМ ПРОБЕГА
+# РАСЧЕТ СТОИМОСТИ РИСКА ДТП НА 100 КМ ПРОБЕГА СО ССЫЛКАМИ-ЯКОРЯМИ
 # ==========================================
 st.markdown("---")
 st.subheader("Анализ стоимости риска аварийности на 100 км пробега")
@@ -807,9 +913,9 @@ risk_saving_per_100km = risk_per_100km_before - risk_per_100km_after
 fleet_risk_reduction_pct = (saved_accident_damage_mode / base_accident_damage_mode * 100) if base_accident_damage_mode > 0 else 0.0
 
 rc1, rc2, rc3 = st.columns(3)
-rc1.metric("Стоимость риска ДТП до внедрения", f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км")
+rc1.metric("Стоимость риска ДТП до внедрения [ⓘ](#meth-risk-100km)", f"{risk_per_100km_before:.1f} {curr_symbol} / 100 км")
 rc2.metric(
-    "Стоимость риска ДТП со SKAI", 
+    "Стоимость риска ДТП со SKAI [ⓘ](#meth-risk-100km)", 
     f"{risk_per_100km_after:.1f} {curr_symbol} / 100 км", 
     delta=f"-{fleet_risk_reduction_pct:.0f}% к риску" if fleet_risk_reduction_pct > 0 else "0%", 
     delta_color="inverse"
@@ -818,7 +924,10 @@ with rc3:
     st.markdown(
         f"""
         <div>
-            <div style="font-size: 14px; opacity: 0.85; margin-bottom: 4px;">Чистая экономия на 100 км пути</div>
+            <div style="font-size: 14px; opacity: 0.85; margin-bottom: 4px; display: flex; align-items: center;">
+                <span>Чистая экономия на 100 км пути</span>
+                <a href="#meth-risk-100km" class="anchor-badge" title="Смотреть методологию расчета">ⓘ</a>
+            </div>
             <div style="font-size: 32px; font-weight: 700; color: #09ab3b; line-height: 1.2;">
                 +{risk_saving_per_100km:.1f} {curr_symbol} / 100 км
             </div>
@@ -830,23 +939,44 @@ with rc3:
 st.markdown("---")
 
 # ==========================================
-# ТАБЛИЦА ДЕТАЛИЗАЦИИ РАСХОДОВ
+# ТАБЛИЦА ДЕТАЛИЗАЦИИ РАСХОДОВ СО ЗНАЧКАМИ-ЯКОРЯМИ
 # ==========================================
 tco_table_data = [
-    ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект"],
-    ["Затраты на ТО и расходники", fmt(total_maint_before), fmt(savings_by_cat["maint"]), "Прямой эффект"],
-    ["Прямой ущерб от аварий / франшизы", fmt(total_direct_accident_damage_before / 12), fmt(savings_by_cat["acc_direct"]), "Прямой эффект"],
-    ["Затраты на страхование (КАСКО и ОСАГО)", fmt(total_insurance_before), fmt(savings_by_cat["insurance"]), "Прямой эффект"],
-    ["Защита от риска Тотал (тяжелых ДТП)", fmt(total_loss_monthly_risk), fmt(savings_by_cat["total_loss"]), "Прямой эффект"],
-    ["Содержание резервного автопарка", fmt(total_reserve_cost_monthly_before), fmt(0), "Косвенный (TCO)"],
-    ["Потери от простоя персонала при ДТП", fmt((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12), fmt(savings_by_cat["acc_tco"] if is_tco else 0), "Косвенный (TCO)"],
-    ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)"],
-    ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)"]
+    ["Затраты на ГСМ (Топливо)", fmt(total_fuel_before), fmt(savings_by_cat["fuel"]), "Прямой эффект", "meth-fuel"],
+    ["Затраты на ТО и расходники", fmt(total_maint_before), fmt(savings_by_cat["maint"]), "Прямой эффект", "meth-maint"],
+    ["Прямой ущерб от аварий / франшизы", fmt(total_direct_accident_damage_before / 12), fmt(savings_by_cat["acc_direct"]), "Прямой эффект", "meth-acc-direct"],
+    ["Затраты на страхование (КАСКО и ОСАГО)", fmt(total_insurance_before), fmt(savings_by_cat["insurance"]), "Прямой эффект", "meth-insurance"],
+    ["Защита от риска Тотал (тяжелых ДТП)", fmt(total_loss_monthly_risk), fmt(savings_by_cat["total_loss"]), "Прямой эффект", "meth-totalloss"],
+    ["Содержание резервного автопарка", fmt(total_reserve_cost_monthly_before), fmt(0), "Косвенный (TCO)", "meth-reserve"],
+    ["Потери от простоя персонала при ДТП", fmt((total_tco_accident_damage_before - total_direct_accident_damage_before) / 12), fmt(savings_by_cat["acc_tco"] if is_tco else 0), "Косвенный (TCO)", "meth-downtime"],
+    ["Расходы на собственный штат диспетчеров (ФОТ)", fmt(total_disp_fot_before), fmt(savings_by_cat["disp"] if is_tco else 0), "Косвенный (TCO)", "meth-disp"],
+    ["Администрирование и оплата штрафов бэк-офисом", fmt(total_fines_loss_before), fmt(savings_by_cat["fines"] if is_tco else 0), "Косвенный (TCO)", "meth-fines"]
 ]
 
-df_tco = pd.DataFrame(tco_table_data, columns=["Фактор / Статья расходов", f"Базовые затраты до внедрения ({curr_symbol}/мес)", f"Прогноз экономии от SKAI ({curr_symbol}/мес)", "Тип фактора"])
-st.dataframe(df_tco, use_container_width=True, hide_index=True)
+tco_rows_html = ""
+for item_name, b_cost, p_sav, f_type, anchor_id in tco_table_data:
+    tco_rows_html += f"""<tr>
+<td>{item_name} <a href="#{anchor_id}" class="anchor-badge" title="Смотреть методологию и формулу">ⓘ</a></td>
+<td style="font-weight: 500;">{b_cost}</td>
+<td style="color: #059669; font-weight: 600;">{p_sav}</td>
+<td style="color: #64748B;">{f_type}</td>
+</tr>"""
 
+tco_table_html = f"""<table class="styled-tco-table">
+<thead>
+<tr>
+<th>Фактор / Статья расходов</th>
+<th>Базовые затраты до внедрения ({curr_symbol}/мес)</th>
+<th>Прогноз экономии от SKAI ({curr_symbol}/мес)</th>
+<th>Тип фактора</th>
+</tr>
+</thead>
+<tbody>
+{tco_rows_html}
+</tbody>
+</table>"""
+
+st.markdown(tco_table_html, unsafe_allow_html=True)
 st.markdown("---")
 
 # ==========================================
@@ -958,6 +1088,7 @@ custom_css = """
         border-collapse: collapse;
         font-family: sans-serif;
         font-size: 14px;
+        width: 100%;
     }
     .styled-table th {
         background-color: #f0f2f6;
@@ -989,60 +1120,105 @@ with st.expander("Методология и математический апп�
     st.markdown(r"""
     ### 1. Расчет базовых ежемесячных затрат автопарка (до внедрения SKAI)
     
+    <div id="meth-fuel" class="calc-target-block">
+
     * **Затраты на ГСМ (Топливо):** Вычисляются на основе годового пробега, нормативного расхода на 100 км и текущей стоимости топлива:  
         $$З_{ГСМ} = \sum \left( \frac{\text{Пробег}_{ТС} \times \text{Расход}_{ТС} \times \text{Цена топлива}}{100 \times 12} \right) \times \text{Кол-во ТС}$$
-    
+    </div>
+
+    <div id="meth-maint" class="calc-target-block">
+
     * **Затраты на ТО и расходники:**  
         $$З_{ТО} = \sum \left( \frac{\text{Стоимость ТО в год}}{12} \right) \times \text{Кол-во ТС}$$
-    
+    </div>
+
+    <div id="meth-acc-direct" class="calc-target-block">
+
     * **Прямой ущерб от ДТП:** Учитывает только прямые физические повреждения или затраты на страховую франшизу:  
         $$У_{прямой} = \sum \left( \frac{\text{Кол-во ДТП в год} \times \text{Стоимость 1 ДТП}}{12} \right)$$
-        
+    </div>
+
+    <div id="meth-insurance" class="calc-target-block">
+
     * **Затраты на страхование (КАСКО и ОСАГО):**  
         $$З_{страх} = \sum \left( \frac{\text{Полис на 1 ТС в год}}{12} \right) \times \text{Кол-во ТС}$$
-        
+    </div>
+
+    <div id="meth-downtime" class="calc-target-block">
+
     * **Скрытые потери TCO от простоя при ДТП:** Включают в себя ФОТ водителя за время ремонта, прямые суточные потери от неработающего ТС (упущенная маржа/подменное авто) и трудозатраты бэк-офиса на разбор инцидента:  
         $$Потери_{простой} = \frac{\text{Кол-во ДТП в год} \times \left( Дней_{простоя} \times (\text{ФОТ}_{водителя/день} + \text{Потери}_{простоя/день}) + Часы_{бэк-офиса} \times Ставка_{часа} \right)}{12}$$
-        
+    </div>
+
+    <div id="meth-disp" class="calc-target-block">
+
+    * **Расходы на собственный штат диспетчеров (ФОТ):**  
+        $$З_{диспетчеры} = Кол-во_{диспетчеров} \times \text{ФОТ}_{диспетчера}$$
+    </div>
+
+    <div id="meth-fines" class="calc-target-block">
+
     * **Администрирование и оплата штрафов:** Учитывает как сумму платежа, так и трудозатраты специалистов на обработку каждого постановления:  
         $$Потери_{штрафы} = \frac{\text{Штрафов на ТС в год} \times \left( Цена_{штрафа} + Время_{обработки} \times Ставка_{часа} \right)}{12} \times Всего_{ТС}$$
+    </div>
+
+    <div id="meth-reserve" class="calc-target-block">
 
     * **Содержание резервного автопарка:**  
         $$З_{резерв} = Кол-во_{резерв} \times Стоимость_{содержания/мес}$$
+    </div>
+
+    <div id="meth-totalloss" class="calc-target-block">
 
     * **Актуарная нагрузка риска катастрофических убытков (Тотал):**  
         $$Риск_{Тотал} = \frac{\text{Ущерб Тотал}}{\text{Период риска (лет)} \times 12}$$
+    </div>
 
     ### 2. Принцип разграничения эффектов продуктов и выборочного оснащения
     
     * **Погрупповое оснащение:** Каждый модуль внедряется строго на выбранные группы ТС. Капитальные (CAPEX) и операционные (OPEX) затраты рассчитываются только на фактически оснащенные единицы техники.
     * **Базовый Мониторинг:** Направлен исключительно на ликвидацию прямых эксплуатационных потерь (устранение нецелевого пробега, контроль регламента ТО и скоростных лимитов для снижения штрафов). Не заявляет эффект предотвращения аварий.
+    <div id="meth-safety-synergy" class="calc-target-block">
+
     * **Видеоаналитика и Безопасное вождение:** Совокупная эффективность предотвращения аварий по каждой группе ТС рассчитывается по формуле независимых совместных вероятностей с учетом контролируемой доли вины водителя компании:
     $$E_{факт, g} = \left[ 1 - (1 - E_{видео, g}) \times (1 - E_{скоринг, g}) \right] \times Доля_{вины}$$
+    </div>
     * **Страховой дисконт:** Скидка при ежегодной пролонгации парковых договоров КАСКО/ОСАГО применяется к полисам автомобилей тех категорий, которые оснащены Видеоаналитикой SKAI.
     * **Резервный автопарк:** Расходы на содержание подменных машин фиксируются как базовая составляющая совокупной стоимости владения (TCO).
+
+    <div id="meth-risk-100km" class="calc-target-block">
 
     ### 3. Расчет удельной стоимости риска ДТП на 100 км пути
     
     Отражает удельную аварийную нагрузку на логистическое плечо автопарка:
     $$Риск_{100км} = \frac{\text{Ежемесячный ущерб от ДТП (прямой или полный TCO)}}{\text{Совокупный месячный пробег автопарка (км)}} \times 100$$
-    
+    </div>
+
     ### 4. Расчет ключевых инвестиционных показателей проекта
     
+    <div id="meth-capex" class="calc-target-block">
+
     * **Стартовые инвестиции (Капитальные вложения):**  
         $$Кап.вложения = \sum (Стоимость_{модуля} \times Кол-во_{оснащенных ТС})$$
-        
+    </div>
+
+    <div id="meth-opex" class="calc-target-block">
+
     * **Операционные расходы (в месяц):**  
         $$Опер.расходы_{мес} = \sum (Абон.плата_{модуля} \times Кол-во_{оснащенных ТС})$$
-        
-    * **Валовая экономия в месяц:** Совокупный объем сокращенных издержек (ГСМ, ТО, ДТП, штрафы, диспетчеры, страховка, Тотал):  
-        $$Экономия_{валовая} = \sum Экономия_{прямая} + \sum Экономия_{TCO}$$
-        
+    </div>
+
+    <div id="meth-net-benefit" class="calc-target-block">
+
     * **Чистая экономия в месяц:**  
         $$Экономия_{чистая} = Экономия_{валовая} - Опер.расходы_{мес}$$
-        
+    </div>
+
+    <div id="meth-payback" class="calc-target-block">
+
     * **Срок окупаемости проекта (Payback Period):**  
         $$Срок_{окупаемости} = \frac{\text{Капитальные вложения (Стартовые инвестиции)}}{\text{Чистая экономия в месяц}}$$
+    </div>
     """)
 
 # ==========================================
@@ -1052,37 +1228,68 @@ st.markdown("---")
 with st.expander("Обоснование показателей эффективности и источники данных", expanded=False):
     st.markdown("""
     ### Базовый мониторинг
+    <div id="just-fuel" class="calc-target-block">
+
     * **Сокращение пробега и ГСМ (%):**
         * **Источник:** Эксплуатационная статистика внедрений SKAI. Для магистральных перевозок потенциал исключения съездов с маршрута составляет 5–7%, для тяжелой техники — 8–10%, для городского развоза — 12–15%. При наличии ранее установленного GPS эффект составляет 3–6% за счет нормализации одометра и диспетчеризации.
         * **Влияние на расчет:** Мультипликатор применяется напрямую к ежемесячной статье «Затраты на ГСМ (Топливо)» оснащенных групп ТС.
+    </div>
+
+    <div id="just-maint" class="calc-target-block">
+
     * **Сокращение износа и ТО (%):**
         * **Источник:** Методология SKAI. Исключение перепробегов пропорционально отдаляет плановые ТО, давая экономию 3–5% бюджета на обслуживание.
         * **Влияние на расчет:** Снижает статью «Затраты на ТО и расходники».
+    </div>
+
+    <div id="just-fines" class="calc-target-block">
+
     * **Сокращение штрафов (%):**
         * **Источник:** Статистика диспетчеризации SKAI. Контроль превышений скоростных порогов через телематику снижает штрафы на 20–40%.
         * **Влияние на расчет:** Сокращает объем прямых штрафов и трудозатраты бэк-офиса на их оплату.
+    </div>
+
     * **Затраты перехода при наличии GPS:**
         * **Источник:** Регламент сервисной службы SKAI. Перевод существующего парка требует инспекции проводки, замены SIM-карт, перепрошивки трекеров и интеграции с ПО, что формирует реальный CAPEX в размере 2 500 руб./ТС.
 
     ### Издержки при ДТП, персонал и резервный автопарк
+    <div id="just-downtime" class="calc-target-block">
+
     * **Потери от 1 дня простоя ТС:**
         * **Источник:** Практика автотранспортных предприятий. Учитывает среднесуточную чистую прибыль (маржу) ТС, которая теряется из-за срыва рейсов во время ремонта, либо стоимость суточной аренды стороннего автомобиля.
         * **Влияние на расчет:** Входит в скрытые потери TCO от простоя техники при ДТП.
+    </div>
+
+    <div id="just-reserve" class="calc-target-block">
+
     * **Резервный автопарк:**
         * **Источник:** Финансовый аудит коммерческих парков. Содержание стоящей подменной техники (амортизация, транспортный налог, страховки, плановое ТО) обходится предприятию в 20 000 – 35 000 руб./мес на 1 ТС.
         * **Влияние на расчет:** Отражает базовую нагрузку компании на содержание резерва.
+    </div>
+
     * **Себестоимость часа работы бэк-офиса:**
         * **Источник:** Расчет на основе фонда оплаты труда диспетчерского центра из расчета 168 рабочих часов в месяц. Отражает трудозатраты инженера по БДД, юриста и бухгалтера на администрирование последствий ДТП (8 часов) и оформление штрафов (30 минут).
         * **Влияние на расчет:** Формирует косвенную TCO-нагрузку от инцидентов.
 
     ### Видеоаналитика
+    <div id="just-accidents" class="calc-target-block">
+
     * **Снижение аварийности со SKAI (%):**
         * **Источник:** Аналитическая база данных SKAI (выборка 1 000 ТС, 120 млн км пробега). Предотвращение засыпаний, отвлечений на смартфон и опасных сближений снижает контролируемую аварийность на 80%.
         * **Влияние на расчет:** Сокращает прямые затраты на ремонт/франшизы, исключает потери от простоев техники и персонала, а также дает право на скидку по автострахованию.
+    </div>
+
+    <div id="just-insurance" class="calc-target-block">
+
     * **Скидка на КАСКО и ОСАГО (%):**
         * **Источник:** Требования андеррайтинга страховых компаний. Наличие видеофиксации дорожной обстановки и действий водителя снижает показатель Loss Ratio парка и дает гарантированный дисконт 15–25% при ежегодной пролонгации полисов оснащенных ТС.
+    </div>
+
+    <div id="just-totalloss" class="calc-target-block">
+
     * **Защита от риска Тотал (катастрофических ДТП):**
         * **Источник:** Страховая статистика коммерческих перевозок. Для крупного парка (>100 ТС) с высокими пробегами вероятность тяжелого ДТП с полным списанием ТС, повреждением груза или третьих лиц составляет 1 случай в 2–3 года со средним совокупным убытком от 2,5 млн руб.
+    </div>
 
     ### Безопасное вождение
     * **Снижение аварийности от скоринга (%):**
@@ -1095,10 +1302,13 @@ with st.expander("Обоснование показателей эффектив
         * **Источник:** Данные телематики SKAI. Плавное вождение продлевает ресурс тормозных колодок, резины и элементов подвески на 15–20%.
         * **Влияние на расчет:** Снижает статью затрат на ТО и расходники.
 
+    <div id="just-disp" class="calc-target-block">
+
     ### Сервис реагирования и аналитики
     * **Сокращение затрат на ФОТ диспетчеров (%):**
         * **Источник:** Практика ситуационного центра SKAI. Автоматический разбор событий и круглосуточная поддержка позволяют оптимизировать штат диспетчеров парка на 60%.
         * **Влияние на расчет:** Снижает TCO-статью расходов на собственный диспетчерский персонал.
+    </div>
 
     ### Контроль топлива
     * **Прямая экономия ГСМ (сливы/карты) (%):**
